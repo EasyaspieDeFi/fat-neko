@@ -231,7 +231,7 @@ const ALTFUN={zap:"0x693F12E9E6B35b34458793546065E8b08e0299d6",usdc:"0xb88339CB7
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.real2";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.tease";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -408,9 +408,12 @@ async function feed(f){
     toast("🔥 Bought & burned!",`${fmtN(res.tokens)} $FATNEKO gone · tx ${shortAddr(res.tx)}`);
     S.lastBurnTx=res.tx; feed._busy=false; grow(f,before); return;
   }
-  // real-spend only — no wallet, no feeding
-  toast("Connect a wallet to feed","feeding buys &amp; burns real $FATNEKO 🔥");sfx.err();
-  const fc=Array.prototype.find.call(document.querySelectorAll('.card'),x=>/Feed /.test(x.textContent));if(fc)fc.scrollIntoView({behavior:"smooth",block:"center"});}
+  // real-spend only: no growth without a wallet — but give newcomers ONE delightful taste so they get hooked.
+  U.eatUntil=now()+460; sfx.eat(); say(pick(REACT[tier().key]),3000);   // cat reacts; S.burned untouched = no real growth
+  if(!U.teased){U.teased=true; confetti("🐱");
+    modal(`<div class="big-e">🍣✨</div><h3>Feed ${S.name} for real?</h3><p>That nibble was on the house 😺 — but he only <b>grows from real $FATNEKO burns</b>. Connect a wallet and every feed <b>buys &amp; burns</b> real tokens on alt.fun — he grows, you flex, the supply shrinks.</p><button class="btn mint" onclick="window.__close();window.__wallet()" style="margin-bottom:8px">🔗 Connect wallet to feed</button><button class="btn ghost" onclick="window.__close()">Maybe later</button>`);
+  } else { toast("Connect a wallet to feed","feeding buys &amp; burns real $FATNEKO 🔥"); }
+  render();save();}
 function pet(){const ti=tierIdx();S.mood=clamp(S.mood+5,0,100);U.eatUntil=now()+150;sfx.ok();
   say(pick(REACT[tier().key]),3500);render();save();}
 function topup(){if(walletOn()){toast("You're on a real wallet","balance is live on-chain now 🔗");return;}S.bal+=5000000;toast("+5,000,000 test $FATNEKO","demo only");sfx.win();render();save();closeModal();}
