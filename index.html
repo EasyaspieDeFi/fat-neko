@@ -231,7 +231,7 @@ const ALTFUN={zap:"0x693F12E9E6B35b34458793546065E8b08e0299d6",usdc:"0xb88339CB7
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.altfun";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.real";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -318,7 +318,7 @@ function tierIdx(){for(let i=0;i<TIERS.length;i++){if(S.mood>=TIERS[i].min)retur
 function tier(){return TIERS[tierIdx()];}
 // ---- burn-to-grow: weight is derived from $FATNEKO bought & burned ----
 const FINAL_LOG=Math.log10(LADDER[LADDER.length-1].g), B_MAX=LADDER[LADDER.length-1].b, FREE_CAP=13000, COMMUNITY_GOAL=TOKEN.burnGoal; // B_MAX=burn to ☀️Sun(30M) · free play caps ~grown adult · COMMUNITY_GOAL=10% of supply across everyone
-function weightOf(){const E=Math.min((S.burned||0)+Math.min(S.freeGrow||0,FREE_CAP),B_MAX);
+function weightOf(){const E=Math.min(S.burned||0,B_MAX);  // growth comes ONLY from real $FATNEKO burned
   let i=0;for(let k=0;k<LADDER.length;k++){if(E>=LADDER[k].b)i=k;else break;}
   if(i>=LADDER.length-1)return LADDER[LADDER.length-1].g;
   const a=LADDER[i],nx=LADDER[i+1],f=(E-a.b)/(nx.b-a.b);
@@ -407,8 +407,9 @@ async function feed(f){
     toast("🔥 Bought & burned!",`${fmtN(res.tokens)} $FATNEKO gone · tx ${shortAddr(res.tx)}`);
     S.lastBurnTx=res.tx; feed._busy=false; grow(f,before); return;
   }
-  if(!spend(f.burn))return;                          // demo path (no wallet)
-  grow(f,ladderIdx());}
+  // real-spend only — no wallet, no feeding
+  toast("Connect a wallet to feed","feeding buys &amp; burns real $FATNEKO 🔥");sfx.err();
+  const fc=Array.prototype.find.call(document.querySelectorAll('.card'),x=>/Feed /.test(x.textContent));if(fc)fc.scrollIntoView({behavior:"smooth",block:"center"});}
 function pet(){const ti=tierIdx();S.mood=clamp(S.mood+5,0,100);U.eatUntil=now()+150;sfx.ok();
   say(pick(REACT[tier().key]),3500);render();save();}
 function topup(){if(walletOn()){toast("You're on a real wallet","balance is live on-chain now 🔗");return;}S.bal+=5000000;toast("+5,000,000 test $FATNEKO","demo only");sfx.win();render();save();closeModal();}
@@ -560,7 +561,7 @@ function playGame(){PG.score=0;PG.t=12;PG.running=true;
     el.addEventListener("click",()=>{if(!PG.running)return;PG.score++;$("#pgScore").textContent=PG.score;sfx.eat();const p=document.createElement("div");p.className="plus";p.textContent="+1";p.style.left=el.style.left;p.style.top=y+"px";area.appendChild(p);setTimeout(()=>p.remove(),600);el.remove();});},560);
   PG.timer=setInterval(()=>{PG.t--;const te=$("#pgTime");if(te)te.textContent=PG.t;if(PG.t<=0)endGame();},1000);}
 function endGame(){if(!PG.running)return;PG.running=false;pgCleanup();const sc=PG.score;
-  S.mood=clamp(S.mood+Math.min(sc*2,30),0,100);S.freeGrow=Math.min((S.freeGrow||0)+sc*300,FREE_CAP);S.weight=weightOf();
+  S.mood=clamp(S.mood+Math.min(sc*2,30),0,100);    // minigame = mood/fun (growth comes only from real burns)
   say(pick(REACT[tier().key]),4000);
   modal(`<div class="big-e">🎣</div><h3>Caught ${sc} fish!</h3><p>${S.name} cheered up <b style="color:var(--mint)">+${Math.min(sc*2,30)}</b> mood</p>
    <button class="btn mint" onclick="window.__close()">Done</button>`);sfx.win();render();save();pushBoard();}
@@ -654,11 +655,12 @@ function drawHero(ts){if(!heroCtx)return;const ctx=heroCtx,W=heroCv.width,H=hero
 
 /* ===== UI ===== */
 function topbar(){$("#topbar").innerHTML=
-  `<div class="chip bal" onclick="window.__econ()"><span class="ic">🪙</span><span>${fmtN(S.bal)}</span></div>
+  `${walletOn()
+     ?`<div class="chip bal" onclick="window.__tab('neko')"><span class="ic">💵</span><span>$${(WALLET.usdc||0).toFixed(2)}</span></div>`
+     :`<div class="chip bal" onclick="window.__wallet()"><span class="ic">🔗</span><span>Connect</span></div>`}
    <div class="chip" style="padding:6px 8px" onclick="window.__econ()">🔥 ${fmtN(S.burned)}</div>
    <div class="chip" style="padding:6px 8px" onclick="window.__mute()">${S.muted?"🔇":"🔈"}</div>
-   <div class="chip" style="padding:6px 8px" onclick="window.__reset()">🥚 New</div>
-   <button class="topup" onclick="window.__topup()">+ $FATNEKO</button>`;}
+   <div class="chip" style="padding:6px 8px" onclick="window.__reset()">🥚 New</div>`;}
 const LEADER_SEED=[
   {name:"Chonkzilla",mint:1,weight:85000},
   {name:"ThiccMittens",mint:888,weight:12400},
@@ -690,10 +692,8 @@ function claimDaily(){
   const yk=dayKey(now()-864e5);
   S.streak=(S.lastClaimDay===yk)?(S.streak||0)+1:1;     // consecutive day -> streak grows, else reset
   S.lastClaimDay=dayKey();
-  const coins=2000+S.streak*1500;
-  const fg=1000+Math.min(S.streak,10)*700;              // free growth (no burn), caps ~grown adult
-  S.bal+=coins; S.freeGrow=Math.min((S.freeGrow||0)+fg,FREE_CAP); S.weight=weightOf(); S.mood=clamp(S.mood+25,0,100); U.eatUntil=now()+460;
-  toast(`🎁 Day ${S.streak} treat!`,`+${fmtN(coins)} 🪙 · grew a little · +25 mood`);
+  S.mood=clamp(S.mood+30,0,100); U.eatUntil=now()+460;   // daily = mood + streak (growth comes only from real burns)
+  toast(`🎁 Day ${S.streak} check-in!`,`+30 mood · 🔥 ${S.streak}-day streak`);
   S.line=pick(REACT[tier().key]); sfx.win();
   render();save();pushBoard();
 }
@@ -1329,8 +1329,8 @@ function render(){topbar();renderTabs();
   <div class="card daily">
     <div class="drow"><div><div class="dtit">🎁 Daily Treat</div>
       <div class="dsub">🔥 ${S.streak||0} day streak${canClaim()?"":" · back tomorrow"}</div></div>
-      ${canClaim()?`<button class="btn gold" style="flex:0 0 auto;width:auto;padding:11px 18px" onclick="window.__claim()">Claim</button>`:`<div class="claimed">✓ Claimed</div>`}</div>
-    <div class="foot" style="text-align:left;margin:7px 0 0">Visit daily to grow ${S.name} for free &amp; keep your streak — bigger streak, bigger treat. Skip days and he sulks.</div>
+      ${canClaim()?`<button class="btn gold" style="flex:0 0 auto;width:auto;padding:11px 18px" onclick="window.__claim()">Check in</button>`:`<div class="claimed">✓ Done</div>`}</div>
+    <div class="foot" style="text-align:left;margin:7px 0 0">Check in daily to cheer ${S.name} up &amp; keep your streak. He only <i>grows</i> from real $FATNEKO burns — feed him to grow.</div>
   </div>
   <div class="card invite">
     <div class="drow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -1359,14 +1359,14 @@ function wire(){
   document.querySelectorAll("[data-feed]").forEach(b=>b.onclick=()=>feed(FOOD_BY_ID[b.dataset.feed]));
   document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{const a=b.dataset.act;if(a==="pet")pet();else if(a==="play")playGame();else if(a==="share")shareCard(false);});
   const hc=$("#hero-cv");if(hc)hc.onclick=()=>pet();}
-window.__econ=()=>modal(`<h3>🔥 Feed = Buy &amp; Burn</h3><p style="text-align:left">Every feed <b>buys $FATNEKO on the market and burns it</b> 🔥 — buy pressure <i>and</i> a permanently shrinking supply. Feed a little 🦐 or a lot 🐳; it all burns and it all grows your Neko.</p>
+window.__econ=()=>modal(`<h3>🔥 Feed = Buy &amp; Burn</h3><p style="text-align:left">Every feed <b>buys $FATNEKO with USDC on alt.fun and burns it</b> 🔥 — real buy pressure <i>and</i> a permanently shrinking supply. Connect a wallet to feed; ${S.name} grows only from real burns.</p>
   <div style="text-align:left;font-family:'Nunito';font-size:12px;color:var(--mut);line-height:1.7;margin:2px 0 10px">
    🪙 $FATNEKO → <a href="${TOKEN.explorer}/token/${TOKEN.addr}" target="_blank">${shortAddr(TOKEN.addr)}</a> · backed by an ${TOKEN.pair} perp (alt.fun)<br>
    📦 supply ${CHAINSTATS.supply!=null?fmtN(CHAINSTATS.supply)+" (live on-chain)":TOKEN.supply.toLocaleString("en-US")} · ☀️ fully grow a Neko = ${fmtN(B_MAX)} burned<br>
    🔥 burned forever (on-chain): <b>${CHAINSTATS.burned!=null?fmtN(CHAINSTATS.burned):"…"}</b> → <a href="${TOKEN.explorer}/address/${TOKEN.burn}" target="_blank">${shortAddr(TOKEN.burn)}</a><br>
    🎯 community goal: burn up to ${COMMUNITY_GOAL.toLocaleString("en-US")} (10% of supply)</div>
-  <button class="btn gold" onclick="window.__topup()" style="margin-bottom:8px">+5,000,000 test $FATNEKO (demo)</button><button class="btn ghost" onclick="window.__close()">Got it</button>`);
-window.__topup=topup;window.__rename=rename;window.__claim=claimDaily;window.__mute=()=>{S.muted=!S.muted;if(!S.muted)sfx.ok();topbar();save();};
+  ${walletOn()?'':`<button class="btn mint" onclick="window.__close();window.__wallet()" style="margin-bottom:8px">🔗 Connect wallet to feed</button>`}<button class="btn ghost" onclick="window.__close()">Got it</button>`);
+window.__topup=()=>{if(!walletOn())connectWallet();};window.__rename=rename;window.__claim=claimDaily;window.__mute=()=>{S.muted=!S.muted;if(!S.muted)sfx.ok();topbar();save();};
 window.__tab=setTab;window.__agentSend=agentSend;
 window.__agentQuick=(txt)=>{if(chatBusy)return;const inp=$("#agentInput");if(inp){inp.value=txt;agentSend();}};
 window.__setup=()=>{const c=$("#setupCard");if(c){const d=c.querySelector("details");if(d)d.open=true;c.scrollIntoView({behavior:"smooth",block:"center"});}};
