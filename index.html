@@ -215,7 +215,7 @@ const TOK10=1000000000000000000n; // 10^18 (18 decimals)
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.b";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.c";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -1300,7 +1300,7 @@ function render(){topbar();renderTabs();
   <div class="card"><h2 style="font-family:'Fredoka';font-size:19px;margin:0 0 4px">🏆 Hall of Chonk</h2>
     <div class="foot" style="text-align:left;margin:0 0 8px">Heaviest nekos in the colony — feed yours to climb the ranks.</div>
     <div class="lb" id="lb">${leaderboard()}</div></div>
-  <div class="foot">Powered by <a href="${TOKEN.explorer}/token/${TOKEN.addr}" target="_blank">$FATNEKO</a> · individual neko preview · in future each is a linked NFT you raise solo<br>DEMO — feeding simulated · <a onclick="window.__reset()">new neko</a></div>`;
+  <div class="foot">Powered by <a href="${TOKEN.explorer}/token/${TOKEN.addr}" target="_blank">$FATNEKO</a></div>`;
   heroCv=$("#hero-cv");heroCtx=heroCv?heroCv.getContext("2d"):null;if(heroCtx)heroCtx.imageSmoothingEnabled=false;
   wire();}
 function wire(){
