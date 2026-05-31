@@ -229,7 +229,7 @@ const TOK10=1000000000000000000n; // 10^18 (18 decimals)
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.d";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.e";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -337,6 +337,8 @@ async function readBalance(addr){
   if(!res||res==="0x")return 0;
   return Number(BigInt(res)/TOK10);}            // whole-token balance (18 dec)
 async function readTotalSupply(){const res=await rpcCall("eth_call",[{to:TOKEN.addr,data:"0x18160ddd"},"latest"]).catch(()=>null);return res&&res!=="0x"?Number(BigInt(res)/TOK10):null;}
+let CHAINSTATS={supply:null,burned:null}; // real live on-chain $FATNEKO numbers
+async function loadChainStats(){try{const[s,bd]=await Promise.all([readTotalSupply(),readBalance(TOKEN.burn)]);if(s!=null)CHAINSTATS.supply=s;if(bd!=null)CHAINSTATS.burned=bd;}catch(e){}}
 async function connectWallet(){
   if(!WC_PROJECT_ID){modal(`<div class="big-e">🔗</div><h3>Wallet not set up yet</h3><p style="text-align:left">Real on-chain burns need a free WalletConnect project id. Create one at <b>cloud.reown.com</b>, paste it into <code>WC_PROJECT_ID</code> in the app, redeploy — then ${S.name} burns real $FATNEKO from your wallet.</p><button class="btn ghost" onclick="window.__close()">Got it</button>`);return;}
   if(WALLET.connecting)return; WALLET.connecting=true; render();
@@ -1337,9 +1339,9 @@ function wire(){
 window.__econ=()=>modal(`<h3>🔥 Feed = Buy &amp; Burn</h3><p style="text-align:left">Every feed <b>buys $FATNEKO on the market and burns it</b> 🔥 — buy pressure <i>and</i> a permanently shrinking supply. Feed a little 🦐 or a lot 🐳; it all burns and it all grows your Neko.</p>
   <div style="text-align:left;font-family:'Nunito';font-size:12px;color:var(--mut);line-height:1.7;margin:2px 0 10px">
    🪙 $FATNEKO → <a href="${TOKEN.explorer}/token/${TOKEN.addr}" target="_blank">${shortAddr(TOKEN.addr)}</a> · backed by an ${TOKEN.pair} perp (alt.fun)<br>
-   📦 supply ${TOKEN.supply.toLocaleString("en-US")} · ☀️ fully grow a Neko = ${fmtN(B_MAX)} burned<br>
-   🎯 community goal: burn up to ${COMMUNITY_GOAL.toLocaleString("en-US")} (10% of supply)<br>
-   🔥 bought &amp; burned → <a href="${TOKEN.explorer}/address/${TOKEN.burn}" target="_blank">${shortAddr(TOKEN.burn)}</a></div>
+   📦 supply ${CHAINSTATS.supply!=null?fmtN(CHAINSTATS.supply)+" (live on-chain)":TOKEN.supply.toLocaleString("en-US")} · ☀️ fully grow a Neko = ${fmtN(B_MAX)} burned<br>
+   🔥 burned forever (on-chain): <b>${CHAINSTATS.burned!=null?fmtN(CHAINSTATS.burned):"…"}</b> → <a href="${TOKEN.explorer}/address/${TOKEN.burn}" target="_blank">${shortAddr(TOKEN.burn)}</a><br>
+   🎯 community goal: burn up to ${COMMUNITY_GOAL.toLocaleString("en-US")} (10% of supply)</div>
   <button class="btn gold" onclick="window.__topup()" style="margin-bottom:8px">+5,000,000 test $FATNEKO (demo)</button><button class="btn ghost" onclick="window.__close()">Got it</button>`);
 window.__topup=topup;window.__rename=rename;window.__claim=claimDaily;window.__mute=()=>{S.muted=!S.muted;if(!S.muted)sfx.ok();topbar();save();};
 window.__tab=setTab;window.__agentSend=agentSend;
@@ -1415,6 +1417,7 @@ setInterval(()=>{applyTime(1);patch();save();},1000);
   U.lastTierIdx=tierIdx();
   pushBoard();
   render();requestAnimationFrame(frame);
+  loadChainStats();                    // real on-chain $FATNEKO supply + burned (display only)
   if(fresh&&!S.onboarded)setTimeout(showWelcome,420);
 })();
 // live shared leaderboard: refresh from everyone, push our latest weight when it changes
