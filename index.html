@@ -210,7 +210,7 @@ const TOKEN={addr:"0x92B26f1EAeb81749Dfb0cC4c1bB46A1970000000",explorer:"https:/
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-30.j";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-30.k";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -323,6 +323,10 @@ function shareX(){const c=LADDER[ladderIdx()],t=tier();
   const txt=S.lastShare||`my cat ${S.name} is now as big & heavy as ${c.e} ${c.n} (${fmtW(S.weight)}) 🐱 ${moodLine}${rk}\n\nthe dream: grow him as big as 🌍 Earth. raise your own Fat Neko 🐾`;
   window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(txt+"\n\n$FATNEKO on #Hyperliquid"),"_blank");sfx.ok();}
 window.__share=()=>{shareX();closeModal();};
+function shareRank(){const c=LADDER[ladderIdx()];const r=(myRank()||"").split("/")[0].trim()||"?";
+  const txt=`🏆 I'm #${r} in the Hall of Chonk — my cat ${S.name} is as big & heavy as ${c.e} ${c.n} (${fmtW(S.weight)}) 🐱\n\nthink your neko can out-chonk mine? raise one 🐾`;
+  window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(txt+"\n\n$FATNEKO on #Hyperliquid"),"_blank");sfx.ok();}
+window.__shareRank=shareRank;
 function invite(){const link=inviteLink();
   modal(`<div class="big-e">🎁</div><h3>Invite friends</h3>
    <p>Share Fat Neko — your friend hatches their own neko with a <b style="color:var(--mint)">welcome treat</b>, and you both grow faster together. 🐱</p>
@@ -527,7 +531,10 @@ function renderProfile(){
       <div class="stat"><div class="k">Times fed</div><div class="v">${S.feeds||0}</div></div>
       <div class="stat"><div class="k">Raising for</div><div class="v">${days} day${days>1?"s":""}</div></div>
     </div>
-    <button class="btn mint" style="margin-top:12px" onclick="window.__share()">𝕏 Share my Fat Neko</button>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn gold" onclick="window.__shareRank()">🏆 Flex my rank</button>
+      <button class="btn mint" onclick="window.__share()">𝕏 Share Neko</button>
+    </div>
   </div>`;
 }
 /* ===== multi-provider BYOK AI (Claude · OpenAI · DeepSeek · MiniMax · …) ===== */
