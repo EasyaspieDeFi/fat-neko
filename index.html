@@ -210,12 +210,12 @@ const TOKEN={addr:"0x92B26f1EAeb81749Dfb0cC4c1bB46A1970000000",explorer:"https:/
 // HyperEVM chain + WalletConnect (non-custodial burns). WC_PROJECT_ID is a PUBLIC client id (safe in-browser):
 // create one free at https://cloud.reown.com and paste it below — one id serves every user.
 const CHAIN={id:999,rpc:"https://rpc.hyperliquid.xyz/evm",name:"HyperEVM",sym:"HYPE",explorer:"https://hyperevmscan.io"};
-const WC_PROJECT_ID="";   // ← paste your WalletConnect/Reown projectId here to enable real wallet burns
+const WC_PROJECT_ID="bdfbac2f1648a6b7567baf258714b4ad";   // WalletConnect/Reown projectId (public client id) — enables real wallet burns
 const TOK10=1000000000000000000n; // 10^18 (18 decimals)
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.wallet";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.b";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -1095,7 +1095,7 @@ function renderAgent(){
   const connected=aiActive(),P=aiProv();
   const provOpts=Object.keys(AI_PROVIDERS).map(k=>`<option value="${k}" ${AICFG.prov===k?'selected':''}>${AI_PROVIDERS[k].label}</option>`).join("");
   const status=connected
-    ? `<div class="aistat ok">🧠 ${P.label} connected · ${aiSearchable()?'🌐 live web + on-chain data':'live on-chain data'} · <a onclick="window.__setup()">setup</a></div>`
+    ? ``
     : `<div class="aistat">💤 ${S.name} is running on built-in cat replies. <a onclick="window.__setup()">Connect an AI key</a> to give him a real brain — live prices, funding, on-chain data & memory.</div>`;
   const QUICK=[["📈","BTC price?","mint"],["🐦","What's CT saying about HYPE?",""],["🔥","Top funding on Hyperliquid right now?",""],["📊","How's the market overall?",""],["🚀","What's trending right now?",""],["💡","Give me one trade idea (nfa).",""],["🐳","Any big whale moves?",""]];
   const chips=QUICK.map(q=>`<button class="qchip ${q[2]}" onclick="window.__agentQuick(${JSON.stringify(q[1]).replace(/"/g,'&quot;')})">${q[0]} ${q[1].replace(/\?.*$/,'?').replace(/ \(nfa\)\./,'')}</button>`).join("");
