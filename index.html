@@ -3,7 +3,21 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
-<title>Fat Neko — your neko</title>
+<title>Fat Neko — your chonky crypto trading buddy</title>
+<meta name="description" content="A cute Tamagotchi cat with an AI crypto trading sidekick. Feed it to burn $FATNEKO, climb the Hall of Chonk, and pull live prices, funding, whales & sentiment on Hyperliquid."/>
+<!-- Open Graph / Twitter card — link unfurls with the Fat Neko cover when shared -->
+<meta property="og:type" content="website"/>
+<meta property="og:site_name" content="Fat Neko"/>
+<meta property="og:title" content="Fat Neko — your chonky crypto trading buddy 🐱"/>
+<meta property="og:description" content="A cute Tamagotchi cat + an AI trading agent. Feed it to burn $FATNEKO, climb the leaderboard, and get live crypto data. Raise yours on Telegram."/>
+<meta property="og:url" content="https://easyaspiedefi.github.io/fat-neko/"/>
+<meta property="og:image" content="https://easyaspiedefi.github.io/fat-neko/assets/og-card-1200x630.jpg"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Fat Neko — your chonky crypto trading buddy 🐱"/>
+<meta name="twitter:description" content="A cute Tamagotchi cat + an AI trading agent. Feed it to burn $FATNEKO, climb the leaderboard, and get live crypto data."/>
+<meta name="twitter:image" content="https://easyaspiedefi.github.io/fat-neko/assets/og-card-1200x630.jpg"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
@@ -215,7 +229,7 @@ const TOK10=1000000000000000000n; // 10^18 (18 decimals)
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.c";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.d";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
