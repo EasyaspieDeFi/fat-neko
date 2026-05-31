@@ -414,9 +414,15 @@ function buildChonkCard(){
   for(let i=0;i<46;i++){const s=i*131.7,px=((Math.sin(s)*0.5+0.5)*W),py=((Math.cos(s*1.7)*0.5+0.5)*H),r=0.8+((s*3.1)%1)*2.2;x.globalAlpha=0.05+0.16*((s*5.5)%1);x.fillStyle=col;x.beginPath();x.arc(px,py,r,0,7);x.fill();}
   x.globalAlpha=1;
   const sh=x.createLinearGradient(0,0,W,H);sh.addColorStop(0,"rgba(255,255,255,.06)");sh.addColorStop(.4,"rgba(255,255,255,0)");x.fillStyle=sh;x.fillRect(0,0,W,H);
+  // holographic foil sweep — faint rainbow diagonal so the card reads "collectible", not "dashboard"
+  x.save();x.globalCompositeOperation="overlay";const foil=x.createLinearGradient(0,H,W,0);
+  [[0,"#ff8fd4"],[.2,"#9b8cff"],[.4,"#5ec8ff"],[.6,"#6fe9cb"],[.8,"#ffd05e"],[1,"#ff8fd4"]].forEach(([o,cc])=>foil.addColorStop(o,cc+"00"));
+  foil.addColorStop(.46,"#9b8cff22");foil.addColorStop(.5,"#6fe9cb2e");foil.addColorStop(.54,"#5ec8ff22");x.fillStyle=foil;x.fillRect(0,0,W,H);x.restore();
   // ---- the Neko himself (real character art, scaled, with shadow / crown / mood fx) ----
   if(nekoReady&&NEKO_IMG.width){
-    const dh=384,sc=dh/NEKO_IMG.height,dw=NEKO_IMG.width*sc,cx=300,baseY=520;
+    const dh=400,sc=dh/NEKO_IMG.height,dw=NEKO_IMG.width*sc,cx=300,baseY=524;
+    // glowing pedestal disc — a premium "product shot" platform under him
+    const ped=x.createRadialGradient(cx,baseY+4,0,cx,baseY+4,dw*0.62);ped.addColorStop(0,col+"4d");ped.addColorStop(.6,col+"14");ped.addColorStop(1,col+"00");x.fillStyle=ped;x.beginPath();x.ellipse(cx,baseY+4,dw*0.6,42,0,0,7);x.fill();
     x.fillStyle="rgba(0,0,0,.36)";x.beginPath();x.ellipse(cx,baseY+8,dw*0.46,20,0,0,7);x.fill();
     x.imageSmoothingEnabled=false;x.drawImage(NEKO_IMG,cx-dw/2,baseY-dh,dw,dh);x.imageSmoothingEnabled=true;
     x.textAlign="center";
@@ -450,6 +456,13 @@ function buildChonkCard(){
   x.font="700 15px 'Nunito'";x.fillStyle="#8fb6ab";x.fillText("Tamagotchi × AI crypto sidekick · free on Telegram",48,fy+58);
   cardPill(x,W-300,fy+18,"▶  Play free",18,"#6fe9cb","#08130f",null);
   x.textAlign="right";x.font="800 22px 'Nunito'";x.fillStyle="#ffd05e";x.fillText("$FATNEKO",W-48,fy+58);
+  // ---- collectible frame: a soft vignette, a glowing inner border, and corner ticks ----
+  const vg=x.createRadialGradient(W/2,H*0.46,H*0.34,W/2,H*0.5,H*0.82);vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,.34)");x.fillStyle=vg;x.fillRect(0,0,W,H);
+  x.save();x.shadowColor=col+"66";x.shadowBlur=14;rrp(x,14,14,W-28,H-28,22);x.lineWidth=2;x.strokeStyle=col+"73";x.stroke();x.restore();
+  rrp(x,14,14,W-28,H-28,22);x.lineWidth=1;x.strokeStyle="rgba(255,255,255,.10)";x.stroke();
+  x.strokeStyle=col;x.lineWidth=3;x.lineCap="round";const cm=30,cl=26;
+  [[cm,cm,1,1],[W-cm,cm,-1,1],[cm,H-cm,1,-1],[W-cm,H-cm,-1,-1]].forEach(([ax,ay,sx,sy])=>{x.beginPath();x.moveTo(ax+sx*cl,ay);x.lineTo(ax,ay);x.lineTo(ax,ay+sy*cl);x.stroke();});
+  x.lineCap="butt";
   return cv;
 }
 function shareCaption(flex){
