@@ -206,11 +206,16 @@ const FOODS=[
 const FOOD_BY_ID={};FOODS.forEach(f=>FOOD_BY_ID[f.id]=f);
 const TOKEN={addr:"0x92B26f1EAeb81749Dfb0cC4c1bB46A1970000000",explorer:"https://hyperevmscan.io",
   burn:"0x000000000000000000000000000000000000dEaD",
-  supply:1000000000, pair:"NVIDIA", burnGoal:100000000};
+  supply:1000000000, pair:"NVIDIA", burnGoal:100000000, dec:18};
+// HyperEVM chain + WalletConnect (non-custodial burns). WC_PROJECT_ID is a PUBLIC client id (safe in-browser):
+// create one free at https://cloud.reown.com and paste it below — one id serves every user.
+const CHAIN={id:999,rpc:"https://rpc.hyperliquid.xyz/evm",name:"HyperEVM",sym:"HYPE",explorer:"https://hyperevmscan.io"};
+const WC_PROJECT_ID="";   // ← paste your WalletConnect/Reown projectId here to enable real wallet burns
+const TOK10=1000000000000000000n; // 10^18 (18 decimals)
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-30.k";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.wallet";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -305,28 +310,178 @@ function weightOf(){const E=Math.min((S.burned||0)+Math.min(S.freeGrow||0,FREE_C
 function ladderIdx(){let i=0;for(let k=0;k<LADDER.length;k++){if(S.weight>=LADDER[k].g)i=k;else break;}return i;}
 function say(line,ms){S.line=line;U.lineUntil=now()+(ms||5000);const b=$("#bubble");if(b)b.textContent=line;}
 
+/* ===== non-custodial wallet + real on-chain $FATNEKO burns (HyperEVM via WalletConnect) ===== */
+let WALLET={addr:"",bal:0,connecting:false}; let wcProvider=null;
+function walletOn(){return !!WALLET.addr;}
+async function rpcCall(method,params){
+  const r=await fetch(CHAIN.rpc,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method,params})});
+  const d=await r.json(); if(d&&d.error)throw new Error(d.error.message||"rpc error"); return d?d.result:null;}
+function pad32(hexNo0x){return hexNo0x.replace(/^0x/,"").toLowerCase().padStart(64,"0");}
+async function readBalance(addr){
+  const data="0x70a08231"+pad32(addr);
+  const res=await rpcCall("eth_call",[{to:TOKEN.addr,data},"latest"]);
+  if(!res||res==="0x")return 0;
+  return Number(BigInt(res)/TOK10);}            // whole-token balance (18 dec)
+async function readTotalSupply(){const res=await rpcCall("eth_call",[{to:TOKEN.addr,data:"0x18160ddd"},"latest"]).catch(()=>null);return res&&res!=="0x"?Number(BigInt(res)/TOK10):null;}
+async function connectWallet(){
+  if(!WC_PROJECT_ID){modal(`<div class="big-e">🔗</div><h3>Wallet not set up yet</h3><p style="text-align:left">Real on-chain burns need a free WalletConnect project id. Create one at <b>cloud.reown.com</b>, paste it into <code>WC_PROJECT_ID</code> in the app, redeploy — then ${S.name} burns real $FATNEKO from your wallet.</p><button class="btn ghost" onclick="window.__close()">Got it</button>`);return;}
+  if(WALLET.connecting)return; WALLET.connecting=true; render();
+  try{
+    const {EthereumProvider}=await import("https://esm.sh/@walletconnect/ethereum-provider@2.17.0");
+    wcProvider=await EthereumProvider.init({projectId:WC_PROJECT_ID,chains:[CHAIN.id],optionalChains:[CHAIN.id],
+      rpcMap:{[CHAIN.id]:CHAIN.rpc},showQrModal:true,
+      metadata:{name:"Fat Neko",description:"Raise a cat, burn $FATNEKO",url:location.origin,icons:[location.origin+"/assets/app-avatar-512.jpg"]}});
+    await wcProvider.connect();
+    const accts=await wcProvider.request({method:"eth_accounts"});
+    WALLET.addr=(accts&&accts[0])||"";
+    if(WALLET.addr){ try{WALLET.bal=await readBalance(WALLET.addr);S.bal=WALLET.bal;}catch(e){}
+      sfx.win(); toast("🔗 Wallet connected",shortAddr(WALLET.addr));
+      if(wcProvider.on)wcProvider.on("disconnect",()=>{WALLET={addr:"",bal:0,connecting:false};wcProvider=null;render();}); }
+  }catch(e){toast("Wallet connect failed",((e&&e.message)||"").slice(0,46));sfx.err();}
+  WALLET.connecting=false; render();}
+async function disconnectWallet(){try{if(wcProvider&&wcProvider.disconnect)await wcProvider.disconnect();}catch(e){} WALLET={addr:"",bal:0,connecting:false}; wcProvider=null; toast("Wallet disconnected"); render();}
+async function refreshBal(){if(WALLET.addr){try{WALLET.bal=await readBalance(WALLET.addr);S.bal=WALLET.bal;}catch(e){}}}
+// burn = ERC-20 transfer(amount) of $FATNEKO to the dead address; resolves on confirmation, throws on revert
+async function burnTx(amountTokens){
+  if(!wcProvider||!WALLET.addr)throw new Error("no wallet");
+  const amt=(BigInt(Math.round(amountTokens))*TOK10).toString(16);
+  const data="0xa9059cbb"+pad32(TOKEN.burn)+amt.padStart(64,"0");
+  let txHash=await wcProvider.request({method:"eth_sendTransaction",params:[{from:WALLET.addr,to:TOKEN.addr,data,value:"0x0"}]});
+  for(let i=0;i<45;i++){await new Promise(r=>setTimeout(r,2000));
+    const rc=await rpcCall("eth_getTransactionReceipt",[txHash]).catch(()=>null);
+    if(rc){if(rc.status&&BigInt(rc.status)===0n)throw new Error("burn reverted");return txHash;}}
+  return txHash;}
+
 function spend(amt){if(S.bal<amt){toast("Not enough $FATNEKO","tap + to top up (demo)");sfx.err();return false;}S.bal-=amt;return true;}
 
-function feed(f){if(!spend(f.burn))return;const before=ladderIdx();
+function grow(f,before){ // shared growth + level-up after a feed (demo or real burn)
   S.burned+=f.burn;S.feeds=(S.feeds||0)+1;S.mood=clamp(S.mood+f.mood,0,100);S.weight=weightOf();U.eatUntil=now()+460;sfx.eat();
   say(pick(REACT[tier().key]),4000);
   if(ladderIdx()>before){const c=LADDER[ladderIdx()];S.lastShare=`my cat ${S.name} just leveled up — now as big & heavy as ${c.e} ${c.n} (${fmtW(S.weight)}) 🐱\n\nthe dream: as big as 🌍 Earth. raise your own Fat Neko 🐾`;render();save();pushBoard();celebrate(c);return;}
   render();save();pushBoard();}
+async function feed(f){
+  if(walletOn()){                                   // REAL on-chain burn from the user's wallet
+    if((WALLET.bal||0)<f.burn){toast("Not enough $FATNEKO",`need ${fmtN(f.burn)} in your wallet`);sfx.err();return;}
+    if(feed._busy)return; feed._busy=true; toast(`🔥 Burning ${fmtN(f.burn)} $FATNEKO…`,"approve in your wallet");
+    let txHash; try{txHash=await burnTx(f.burn);}catch(e){feed._busy=false;toast("Burn failed",((e&&e.message)||"").slice(0,46));sfx.err();return;}
+    const before=ladderIdx(); await refreshBal();
+    toast("🔥 Burned on-chain!",`tx ${shortAddr(txHash)} ✓`);
+    S.lastBurnTx=txHash; feed._busy=false; grow(f,before); return;
+  }
+  if(!spend(f.burn))return;                          // demo path (no wallet)
+  grow(f,ladderIdx());}
 function pet(){const ti=tierIdx();S.mood=clamp(S.mood+5,0,100);U.eatUntil=now()+150;sfx.ok();
   say(pick(REACT[tier().key]),3500);render();save();}
-function topup(){S.bal+=5000000;toast("+5,000,000 test $FATNEKO","demo only");sfx.win();render();save();closeModal();}
+function topup(){if(walletOn()){toast("You're on a real wallet","balance is live on-chain now 🔗");return;}S.bal+=5000000;toast("+5,000,000 test $FATNEKO","demo only");sfx.win();render();save();closeModal();}
 function rename(){const v=prompt("Name your Neko:",S.name);if(v!==null){S.name=(v.trim().slice(0,14))||S.name;render();save();pushBoard();}}
-function shareX(){const c=LADDER[ladderIdx()],t=tier();
-  const rank=parseInt((myRank()||"").split("/")[0],10)||999;
-  const moodLine={bliss:"and he is THRIVING ✨",happy:"living his best life 😸",content:"vibes immaculate 🍃",meh:"unimpressed, as usual 😼",grumpy:"and frankly rude about it 🙄",rude:"and now he's plotting against me 😼",feral:"send help, he's gone FERAL 🚨"}[t.key]||"";
-  const rk=(rank>0&&rank<=100)?` · #${rank} in the Hall of Chonk 🏆`:"";
-  const txt=S.lastShare||`my cat ${S.name} is now as big & heavy as ${c.e} ${c.n} (${fmtW(S.weight)}) 🐱 ${moodLine}${rk}\n\nthe dream: grow him as big as 🌍 Earth. raise your own Fat Neko 🐾`;
-  window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(txt+"\n\n$FATNEKO on #Hyperliquid"),"_blank");sfx.ok();}
-window.__share=()=>{shareX();closeModal();};
-function shareRank(){const c=LADDER[ladderIdx()];const r=(myRank()||"").split("/")[0].trim()||"?";
-  const txt=`🏆 I'm #${r} in the Hall of Chonk — my cat ${S.name} is as big & heavy as ${c.e} ${c.n} (${fmtW(S.weight)}) 🐱\n\nthink your neko can out-chonk mine? raise one 🐾`;
-  window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(txt+"\n\n$FATNEKO on #Hyperliquid"),"_blank");sfx.ok();}
-window.__shareRank=shareRank;
+/* ===== 𝕏 share — a gorgeous generated "Chonk Card" (canvas art + great copy) =====
+   The text-only intent is the weak link: X shows a wall of words and nobody clicks.
+   So we render a 1200×675 trading-card of the player's actual Neko — same teal plush,
+   same mood, real stats — and share it as an IMAGE (native share sheet → attaches to
+   the post on mobile; save-image + X-intent fallback on desktop). Pretty > wordy. */
+const MOOD_FX={bliss:"💖",happy:"✨",content:"🍃",meh:"💤",grumpy:"💢",rude:"💢",feral:"🚨"};
+const MOOD_CAP={bliss:"and he is THRIVING ✨",happy:"living his best life 😸",content:"vibes immaculate 🍃",meh:"unimpressed, as usual 😼",grumpy:"and frankly rude about it 🙄",rude:"and now he's plotting against me 😼",feral:"send help — he's gone FERAL 🚨"};
+const CARD_TOP={bliss:"#16463f",happy:"#16463f",content:"#123e37",meh:"#1c302f",grumpy:"#272b25",rude:"#2e2127",feral:"#351a1e"};
+const CARD_BOT={bliss:"#06140f",happy:"#06140f",content:"#06130f",meh:"#0a1413",grumpy:"#120d0b",rude:"#160d0e",feral:"#190b0c"};
+function rrp(x,a,b,w,h,r){r=Math.min(r,w/2,h/2);x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();}
+function fitFont(x,txt,px,weight,fam,maxW){let s=px;do{x.font=`${weight} ${s}px ${fam}`;if(x.measureText(txt).width<=maxW)break;s-=2;}while(s>12);return s;}
+// a rounded "pill" label, returns its width so callers can lay things out in a row
+function cardPill(x,cx,cy,txt,fz,bg,fg,bd){x.font=`800 ${fz}px 'Nunito'`;const tw=x.measureText(txt).width,padX=fz*0.85,h=fz+fz*0.9,w=tw+padX*2;rrp(x,cx,cy,w,h,h/2);x.fillStyle=bg;x.fill();if(bd){x.lineWidth=2;x.strokeStyle=bd;x.stroke();}x.fillStyle=fg;x.textAlign="left";x.textBaseline="middle";x.fillText(txt,cx+padX,cy+h/2+1);x.textBaseline="alphabetic";return w;}
+function buildChonkCard(){
+  const W=1200,H=675,DPR=2,cv=document.createElement("canvas");cv.width=W*DPR;cv.height=H*DPR;
+  const x=cv.getContext("2d");x.scale(DPR,DPR);
+  const t=tier(),k=t.key,col=t.col,c=LADDER[ladderIdx()];
+  const rankN=parseInt((myRank()||"").split("/")[0],10)||0;
+  const earthIdx=LADDER.findIndex(l=>l.n==="planet Earth"),goalLog=Math.log10(LADDER[earthIdx<0?LADDER.length-1:earthIdx].g);
+  const prog=clamp(Math.log10(Math.max(S.weight,1))/goalLog,0.02,1);
+  // ---- backdrop: mood-tinted gradient + glow behind the cat + drifting motes ----
+  const bg=x.createLinearGradient(0,0,0,H);bg.addColorStop(0,CARD_TOP[k]||"#123e37");bg.addColorStop(1,CARD_BOT[k]||"#06130f");x.fillStyle=bg;x.fillRect(0,0,W,H);
+  const gx=300,gy=360,gl=x.createRadialGradient(gx,gy,0,gx,gy,380);gl.addColorStop(0,col+"55");gl.addColorStop(.55,col+"1c");gl.addColorStop(1,col+"00");x.fillStyle=gl;x.fillRect(0,0,W,H);
+  for(let i=0;i<46;i++){const s=i*131.7,px=((Math.sin(s)*0.5+0.5)*W),py=((Math.cos(s*1.7)*0.5+0.5)*H),r=0.8+((s*3.1)%1)*2.2;x.globalAlpha=0.05+0.16*((s*5.5)%1);x.fillStyle=col;x.beginPath();x.arc(px,py,r,0,7);x.fill();}
+  x.globalAlpha=1;
+  const sh=x.createLinearGradient(0,0,W,H);sh.addColorStop(0,"rgba(255,255,255,.06)");sh.addColorStop(.4,"rgba(255,255,255,0)");x.fillStyle=sh;x.fillRect(0,0,W,H);
+  // ---- the Neko himself (real character art, scaled, with shadow / crown / mood fx) ----
+  if(nekoReady&&NEKO_IMG.width){
+    const dh=384,sc=dh/NEKO_IMG.height,dw=NEKO_IMG.width*sc,cx=300,baseY=520;
+    x.fillStyle="rgba(0,0,0,.36)";x.beginPath();x.ellipse(cx,baseY+8,dw*0.46,20,0,0,7);x.fill();
+    x.imageSmoothingEnabled=false;x.drawImage(NEKO_IMG,cx-dw/2,baseY-dh,dw,dh);x.imageSmoothingEnabled=true;
+    x.textAlign="center";
+    if(isKing){x.font="46px serif";x.fillText("👑",cx,baseY-dh+10);}
+    x.font="36px serif";x.globalAlpha=.92;x.fillText(MOOD_FX[k]||"✨",cx+dw*0.44,baseY-dh*0.74);x.font="26px serif";x.fillText(MOOD_FX[k]||"✨",cx-dw*0.42,baseY-dh*0.48);x.globalAlpha=1;
+    cardPill(x,cx-((()=>{x.font="800 22px 'Nunito'";return x.measureText(t.face+"  "+t.name).width+22*0.85*2;})())/2,baseY+22,t.face+"  "+t.name,22,"rgba(8,18,15,.78)",col,col+"66");
+  }
+  // ---- right panel: kicker, name, the headline "as heavy as", rank, progress ----
+  const px=548,rightX=1158,colW=rightX-px;
+  x.textAlign="left";x.font="800 22px 'Nunito'";x.fillStyle=col;x.fillText("🐾  FAT NEKO",px,66);
+  if(S.mint){x.font="800 16px 'Nunito'";const idt="#"+S.mint+" / 10,000",iw=x.measureText(idt).width;rrp(x,rightX-iw-22,46,iw+22,30,15);x.fillStyle="rgba(8,18,15,.7)";x.fill();x.lineWidth=2;x.strokeStyle=col+"55";x.stroke();x.fillStyle="#cfeee4";x.textAlign="left";x.fillText(idt,rightX-iw-11,67);}
+  const nm=(S.name||"Fat Neko").toString();x.textAlign="left";const nf=fitFont(x,nm,58,"700","'Fredoka'",colW);x.font=`700 ${nf}px 'Fredoka'`;x.fillStyle="#eafff8";x.fillText(nm,px,138);
+  x.font="600 25px 'Fredoka'";x.fillStyle=col;x.fillText(chonkTitle(),px,176);
+  // headline stat panel — the flex
+  rrp(x,px,200,colW,158,22);x.fillStyle="rgba(6,18,14,.55)";x.fill();x.lineWidth=2;x.strokeStyle=col+"3a";x.stroke();
+  x.fillStyle="#7fd9c4";x.font="800 16px 'Nunito'";x.fillText("A S   B I G   &   H E A V Y   A S",px+26,236);
+  const big=c.e+"  "+c.n,bf=fitFont(x,big,48,"700","'Fredoka'",colW-52);x.font=`700 ${bf}px 'Fredoka'`;x.fillStyle="#eafff8";x.fillText(big,px+26,294);
+  x.font="800 21px 'Nunito'";x.fillStyle=col;x.fillText(fmtW(S.weight)+"   ·   "+fmtLen(c.m)+" big",px+26,334);
+  // rank + quick-stat row
+  let ry=400;
+  if(rankN>0){const rt=(rankN===1?"👑 #1":"🏆 #"+rankN)+"  ·  Hall of Chonk";cardPill(x,px,ry-22,rt,21,"rgba(255,208,94,.16)","#ffd05e","rgba(255,208,94,.55)");}
+  const days=Math.max(1,Math.ceil((now()-(S.born||now()))/864e5));
+  x.font="700 17px 'Nunito'";x.fillStyle="#8fb6ab";x.textAlign="left";x.fillText("🔥 "+fmtN(S.burned)+" burned    🗓 "+days+"d raised    "+t.face+" "+Math.round(S.mood)+"/100",px,ry+34);
+  // progress-to-the-dream bar
+  const by=ry+72;x.font="700 16px 'Nunito'";x.fillStyle="#8fb6ab";x.fillText("the dream",px,by-8);x.textAlign="right";x.fillText("🌍 Earth",rightX,by-8);x.textAlign="left";
+  rrp(x,px,by,colW,16,8);x.fillStyle="rgba(255,255,255,.08)";x.fill();
+  const pgrad=x.createLinearGradient(px,0,rightX,0);pgrad.addColorStop(0,"#6fe9cb");pgrad.addColorStop(1,"#ffd05e");rrp(x,px,by,Math.max(16,colW*prog),16,8);x.fillStyle=pgrad;x.fill();
+  // ---- footer band: the pitch + CTA ----
+  const fy=590;x.strokeStyle="rgba(255,255,255,.1)";x.lineWidth=1.5;x.beginPath();x.moveTo(40,fy);x.lineTo(W-40,fy);x.stroke();
+  x.textAlign="left";x.font="700 24px 'Fredoka'";x.fillStyle="#eafff8";x.fillText("Raise your own chonky cat 🐾",48,fy+34);
+  x.font="700 15px 'Nunito'";x.fillStyle="#8fb6ab";x.fillText("Tamagotchi × AI crypto sidekick · free on Telegram",48,fy+58);
+  cardPill(x,W-300,fy+18,"▶  Play free",18,"#6fe9cb","#08130f",null);
+  x.textAlign="right";x.font="800 22px 'Nunito'";x.fillStyle="#ffd05e";x.fillText("$FATNEKO",W-48,fy+58);
+  return cv;
+}
+function shareCaption(flex){
+  const c=LADDER[ladderIdx()],t=tier(),link=inviteLink();
+  const rankN=parseInt((myRank()||"").split("/")[0],10)||0;
+  const rk=rankN>0?(rankN===1?` · 👑 #1 in the Hall of Chonk`:` · 🏆 #${rankN} in the Hall of Chonk`):"";
+  let txt;
+  if(flex&&rankN>0){
+    txt=`🏆 #${rankN} in the Hall of Chonk.\n\nmy cat ${S.name} is as big & heavy as ${c.e} ${c.n} (${fmtW(S.weight)}) 🐱 think your neko can out-chonk mine?\n\nraise one 👇\n${link}\n\n$FATNEKO`;
+  }else{
+    txt=`my cat ${S.name} is as big & heavy as ${c.e} ${c.n} — ${fmtW(S.weight)} of pure chonk 🐱 ${MOOD_CAP[t.key]||""}${rk}\n\nthe dream: grow him to the size of 🌍 Earth.\nraise your own Fat Neko 👇\n${link}\n\n$FATNEKO`;
+  }
+  return txt;
+}
+const SHARE={url:"",cap:""};
+async function shareCard(flex){
+  sfx.ok();
+  const cap=shareCaption(flex);S.lastShare=cap;save();SHARE.cap=cap;SHARE.url="";
+  try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
+  try{SHARE.url=buildChonkCard().toDataURL("image/png");}catch(e){SHARE.url="";}
+  const imgHtml=SHARE.url?`<img src="${SHARE.url}" alt="Fat Neko card" style="width:100%;border-radius:14px;border:var(--bd);box-shadow:0 4px 14px rgba(0,0,0,.5);margin-bottom:12px"/>`:"";
+  modal(`${imgHtml}<h3 style="margin-bottom:4px">${flex?"Flex your rank 🏆":"Share your Neko 🐱"}</h3>
+   <p style="margin-bottom:12px">A one-tap card of your chonk — built to make people on X go <b style="color:var(--mint)">"wait, what IS this?"</b></p>
+   <button class="btn mint" style="width:100%;margin-bottom:8px" onclick="window.__doShare()">📤 Share to X</button>
+   <div style="display:flex;gap:8px;margin-bottom:6px">
+     <button class="btn ghost" onclick="window.__saveCard()">💾 Save image</button>
+     <button class="btn ghost" onclick="window.__copyCap()">📋 Copy caption</button>
+   </div>`);
+}
+function dataUrlToFile(u,name){return fetch(u).then(r=>r.blob()).then(b=>new File([b],name,{type:"image/png"})).catch(()=>null);}
+function openXIntent(){window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(SHARE.cap),"_blank");}
+function saveCardFile(){if(!SHARE.url)return;const a=document.createElement("a");a.href=SHARE.url;a.download="fat-neko.png";document.body.appendChild(a);a.click();a.remove();}
+window.__doShare=async()=>{
+  const f=SHARE.url?await dataUrlToFile(SHARE.url,"fat-neko.png"):null;
+  if(f&&navigator.canShare&&navigator.canShare({files:[f]})){
+    try{await navigator.share({files:[f],text:SHARE.cap});toast("Shared! 🐱","your chonk is on the timeline");closeModal();return;}
+    catch(e){if(e&&e.name==="AbortError")return;}
+  }
+  // no native file-share (desktop / older webviews): hand them the image + a pre-filled post
+  saveCardFile();openXIntent();
+  toast("Image saved 🐾","attach it to your X post — caption's ready!");
+};
+window.__saveCard=()=>{saveCardFile();toast(SHARE.url?"Card saved 🐱":"Image not ready","find it in your downloads");sfx.ok();};
+window.__copyCap=()=>{const done=()=>{toast("Caption copied 📋");sfx.ok();};try{if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(SHARE.cap).then(done,done);else{const ta=document.createElement("textarea");ta.value=SHARE.cap;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();done();}}catch(e){done();}};
+window.__share=()=>shareCard(false);
+window.__shareRank=()=>shareCard(true);
 function invite(){const link=inviteLink();
   modal(`<div class="big-e">🎁</div><h3>Invite friends</h3>
    <p>Share Fat Neko — your friend hatches their own neko with a <b style="color:var(--mint)">welcome treat</b>, and you both grow faster together. 🐱</p>
@@ -1133,9 +1288,14 @@ function render(){topbar();renderTabs();
     <div class="foot" style="text-align:left;margin:7px 0 0">Share your link — every friend who hatches a neko helps the whole colony grow $FATNEKO faster. 🔥</div>
   </div>
   <div class="card"><h2 style="font-family:'Fredoka';font-size:19px;margin:0 0 2px">🍣 Feed ${S.name}</h2>
-    <div class="foot" style="text-align:left;margin:0 0 8px">Each feed buys $FATNEKO &amp; burns it 🔥 — bigger burn, bigger Neko.</div>
+    <div class="foot" style="text-align:left;margin:0 0 8px">${walletOn()?`Each feed <b>burns real $FATNEKO</b> from your wallet on-chain 🔥 — gone forever, bigger Neko.`:`Each feed burns $FATNEKO 🔥 — bigger burn, bigger Neko.`}</div>
+    <div class="aistat ${walletOn()?'ok':''}" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+      <span>${walletOn()?`🔗 ${shortAddr(WALLET.addr)} · <b>${fmtN(WALLET.bal)}</b> $FATNEKO`:(WALLET.connecting?`🔗 connecting…`:`🔥 Connect a wallet to burn real $FATNEKO`)}</span>
+      ${walletOn()?`<a onclick="window.__walletDisconnect()">disconnect</a>`:`<button class="buy" onclick="window.__wallet()" ${WALLET.connecting?'disabled':''}>Connect</button>`}
+    </div>
     ${FOODS.map(f=>`<div class="item"><div class="e">${f.e}</div><div class="info"><div class="t">${f.n} <span class="rar ${f.rar}">${f.rar}</span></div>
-      <div class="d">🔥 burns ${fmtN(f.burn)} · +${f.mood} mood</div></div><button class="buy" data-feed="${f.id}">Feed<small>🔥 ${fmtN(f.burn)}</small></button></div>`).join("")}
+      <div class="d">🔥 burns ${fmtN(f.burn)} · +${f.mood} mood</div></div><button class="buy" data-feed="${f.id}">${walletOn()?'Burn':'Feed'}<small>🔥 ${fmtN(f.burn)}</small></button></div>`).join("")}
+    ${walletOn()?`<div class="foot" style="text-align:left;margin:6px 0 0">Burns are real transactions on ${CHAIN.name} — you'll approve each in your wallet, and need a little ${CHAIN.sym} for gas. ${S.lastBurnTx?`Last: <a href="${TOKEN.explorer}/tx/${S.lastBurnTx}" target="_blank">${shortAddr(S.lastBurnTx)}</a>`:''}</div>`:''}
   </div>
   <div class="card"><h2 style="font-family:'Fredoka';font-size:19px;margin:0 0 4px">🏆 Hall of Chonk</h2>
     <div class="foot" style="text-align:left;margin:0 0 8px">Heaviest nekos in the colony — feed yours to climb the ranks.</div>
@@ -1145,7 +1305,7 @@ function render(){topbar();renderTabs();
   wire();}
 function wire(){
   document.querySelectorAll("[data-feed]").forEach(b=>b.onclick=()=>feed(FOOD_BY_ID[b.dataset.feed]));
-  document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{const a=b.dataset.act;if(a==="pet")pet();else if(a==="play")playGame();else if(a==="share")shareX();});
+  document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{const a=b.dataset.act;if(a==="pet")pet();else if(a==="play")playGame();else if(a==="share")shareCard(false);});
   const hc=$("#hero-cv");if(hc)hc.onclick=()=>pet();}
 window.__econ=()=>modal(`<h3>🔥 Feed = Buy &amp; Burn</h3><p style="text-align:left">Every feed <b>buys $FATNEKO on the market and burns it</b> 🔥 — buy pressure <i>and</i> a permanently shrinking supply. Feed a little 🦐 or a lot 🐳; it all burns and it all grows your Neko.</p>
   <div style="text-align:left;font-family:'Nunito';font-size:12px;color:var(--mut);line-height:1.7;margin:2px 0 10px">
@@ -1169,6 +1329,7 @@ window.__vaultClear=vaultClear;
 window.__cgSave=()=>{const base=$("#cgBase")?$("#cgBase").value:"";cgSave(base);};
 window.__cgClear=cgClear;
 window.__cgReset=()=>{cgSave(DATA_DEFAULT);};
+window.__wallet=connectWallet;window.__walletDisconnect=disconnectWallet;
 window.__reset=()=>{if(confirm("Hatch a new neko? Progress lost.")){S={name:"Mochi",mint:Math.floor(Math.random()*10000)+1,weight:0,mood:80,bal:50000,burned:0,freeGrow:0,feeds:0,born:now(),muted:S.muted,lastSeen:now(),lastShare:"",line:"",streak:0,lastClaimDay:"",pid:S.pid};S.weight=weightOf();U.lastTierIdx=tierIdx();CHAT=[];AIMEM="";Store.set("fatneko_chat","[]");Store.set("fatneko_aimem","");render();save();pushBoard();sfx.win();}};
 
 /* ===== mood decay + dialogue ===== */
