@@ -231,7 +231,7 @@ const ALTFUN={zap:"0x693F12E9E6B35b34458793546065E8b08e0299d6",usdc:"0xb88339CB7
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.real";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.real2";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -292,13 +292,14 @@ let saveT=null;function save(){if(saveT)return;saveT=setTimeout(()=>{saveT=null;
 // GLOBAL leaderboard — every player's neko lands in one real board on the live backend
 // (trmnl.pro). Falls back to a localStorage cache when the backend is unreachable or the
 // /api/neko route isn't deployed yet, so the board never breaks.
-let BOARD={}, pushT=null;
-function nekoApi(){return cgOn()?cgBase():"";}
+let BOARD={}, pushT=null, nekoApiDown=false;   // graceful: once /api/neko 404s this session, stop hitting it & use the local board
+function nekoApi(){return (!nekoApiDown&&cgOn())?cgBase():"";}
 async function pullBoard(){
   const api=nekoApi();
   if(api){try{
     const r=await fetch(api+"/api/neko/leaderboard?limit=100",{headers:{accept:"application/json"}});
     if(r.ok){const arr=await r.json();if(Array.isArray(arr)){const m={};arr.forEach(e=>{if(e&&e.pid)m[e.pid]={name:e.name,mint:e.mint,weight:e.weight,ts:e.ts};});BOARD=m;try{Store.set(BKEY,JSON.stringify(BOARD),true);}catch(_){}return;}}
+    else if(r.status===404)nekoApiDown=true;   // route not deployed yet → fall back quietly
   }catch(e){}}
   try{const raw=await Store.get(BKEY,true);if(raw){const m=JSON.parse(raw);if(m&&typeof m==="object")BOARD=m;}}catch(e){}
 }
