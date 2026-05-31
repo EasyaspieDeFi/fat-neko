@@ -210,7 +210,7 @@ const TOKEN={addr:"0x92B26f1EAeb81749Dfb0cC4c1bB46A1970000000",explorer:"https:/
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-30.i";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-30.j";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -268,12 +268,25 @@ const Store={mem:{},
     if(!sh&&CS){try{await new Promise((res,rej)=>CS.setItem(k,v,e=>e?rej(e):res()));}catch(e){}}
     try{if(window.storage&&window.storage.set)await window.storage.set(k,v,!!sh);}catch(e){}}};
 let saveT=null;function save(){if(saveT)return;saveT=setTimeout(()=>{saveT=null;S.lastSeen=now();Store.set(KEY,JSON.stringify(S));},600);}
-// shared leaderboard (every player's neko lands in one live board)
+// GLOBAL leaderboard — every player's neko lands in one real board on the live backend
+// (trmnl.pro). Falls back to a localStorage cache when the backend is unreachable or the
+// /api/neko route isn't deployed yet, so the board never breaks.
 let BOARD={}, pushT=null;
-async function pullBoard(){try{const raw=await Store.get(BKEY,true);if(raw){const m=JSON.parse(raw);if(m&&typeof m==="object")BOARD=m;}}catch(e){}}
-function pushBoard(){if(pushT)return;pushT=setTimeout(async()=>{pushT=null;await pullBoard();
+function nekoApi(){return cgOn()?cgBase():"";}
+async function pullBoard(){
+  const api=nekoApi();
+  if(api){try{
+    const r=await fetch(api+"/api/neko/leaderboard?limit=100",{headers:{accept:"application/json"}});
+    if(r.ok){const arr=await r.json();if(Array.isArray(arr)){const m={};arr.forEach(e=>{if(e&&e.pid)m[e.pid]={name:e.name,mint:e.mint,weight:e.weight,ts:e.ts};});BOARD=m;try{Store.set(BKEY,JSON.stringify(BOARD),true);}catch(_){}return;}}
+  }catch(e){}}
+  try{const raw=await Store.get(BKEY,true);if(raw){const m=JSON.parse(raw);if(m&&typeof m==="object")BOARD=m;}}catch(e){}
+}
+function pushBoard(){if(pushT)return;pushT=setTimeout(async()=>{pushT=null;
+  const api=nekoApi();
+  if(api){try{await fetch(api+"/api/neko/score",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pid:S.pid,name:S.name,mint:S.mint,weight:Math.round(S.weight)})});}catch(e){}}
+  await pullBoard();
   BOARD[S.pid]={name:S.name,mint:S.mint,weight:Math.round(S.weight),ts:now()};
-  Store.set(BKEY,JSON.stringify(BOARD),true);},700);}
+  try{Store.set(BKEY,JSON.stringify(BOARD),true);}catch(e){}},700);}
 
 function fmtN(n){if(n>=1e6)return(n/1e6).toFixed(2)+"M";if(n>=1e3)return(n/1e3).toFixed(n>=1e4?0:1)+"K";return Math.floor(n).toLocaleString("en-US");}
 function fmtW(g){if(g<1000)return Math.round(g)+" g";const kg=g/1000;if(kg<1000)return (kg<10?kg.toFixed(1):Math.round(kg).toLocaleString())+" kg";
@@ -447,7 +460,8 @@ const LEADER_SEED=[
 let isKing=false;
 function leaderboard(){
   const map={};
-  LEADER_SEED.forEach(s=>{map["seed:"+s.mint]={name:s.name,mint:s.mint,weight:s.weight};});      // baseline colony
+  const realCount=Object.keys(BOARD).filter(p=>p!==S.pid).length;
+  if(realCount<5)LEADER_SEED.forEach(s=>{map["seed:"+s.mint]={name:s.name,mint:s.mint,weight:s.weight};}); // colony only until the real board fills
   Object.keys(BOARD).forEach(pid=>{const e=BOARD[pid];if(e&&typeof e.weight==="number")map[pid]={name:e.name||"anon",mint:e.mint||0,weight:e.weight};}); // real players
   map[S.pid]={name:S.name,mint:S.mint,weight:Math.round(S.weight),you:true};                       // my live neko
   const all=Object.values(map).sort((a,b)=>b.weight-a.weight);
@@ -486,7 +500,8 @@ function renderTabs(){
 }
 function setTab(t){U.tab=t;render();}
 function myRank(){
-  const map={}; LEADER_SEED.forEach(s=>map["seed:"+s.mint]={weight:s.weight});
+  const map={}; const realCount=Object.keys(BOARD).filter(p=>p!==S.pid).length;
+  if(realCount<5)LEADER_SEED.forEach(s=>map["seed:"+s.mint]={weight:s.weight});
   Object.keys(BOARD).forEach(p=>{const e=BOARD[p];if(e&&typeof e.weight==="number")map[p]={weight:e.weight};});
   map[S.pid]={weight:Math.round(S.weight),you:true};
   const all=Object.values(map).sort((a,b)=>b.weight-a.weight);
