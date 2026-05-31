@@ -210,12 +210,12 @@ const LADDER=[
 function fmtLen(m){if(m<0.01)return Math.round(m*1000)+" mm";if(m<1)return Math.round(m*100)+" cm";
   if(m<1000)return m.toFixed(m<10?1:0)+" m";const km=m/1000;if(km<1e5)return km.toFixed(km<10?1:0)+" km";
   return Math.round(km).toLocaleString("en-US")+" km";}
-const FOODS=[
-  {id:"krill",e:"🦐",n:"Krill",rar:"common",burn:250,mood:6},
-  {id:"snack",e:"🐟",n:"Snack",rar:"common",burn:1000,mood:9},
-  {id:"meal",e:"🍣",n:"Meal",rar:"uncommon",burn:5000,mood:14},
-  {id:"feast",e:"🍱",n:"Feast",rar:"rare",burn:25000,mood:22},
-  {id:"whale",e:"🐳",n:"Whale Feast",rar:"legendary",burn:100000,mood:40}
+const FOODS=[  // burn = demo/growth amount (game balance) · usd = real cost in USDC for wallet buy-&-burn
+  {id:"krill",e:"🦐",n:"Krill",rar:"common",burn:250,mood:6,usd:0.05},
+  {id:"snack",e:"🐟",n:"Snack",rar:"common",burn:1000,mood:9,usd:0.25},
+  {id:"meal",e:"🍣",n:"Meal",rar:"uncommon",burn:5000,mood:14,usd:0.50},
+  {id:"feast",e:"🍱",n:"Feast",rar:"rare",burn:25000,mood:22,usd:1.00},
+  {id:"whale",e:"🐳",n:"Whale Feast",rar:"legendary",burn:100000,mood:40,usd:5.00}
 ];
 const FOOD_BY_ID={};FOODS.forEach(f=>FOOD_BY_ID[f.id]=f);
 const TOKEN={addr:"0x92B26f1EAeb81749Dfb0cC4c1bB46A1970000000",explorer:"https://hyperevmscan.io",
@@ -226,10 +226,12 @@ const TOKEN={addr:"0x92B26f1EAeb81749Dfb0cC4c1bB46A1970000000",explorer:"https:/
 const CHAIN={id:999,rpc:"https://rpc.hyperliquid.xyz/evm",name:"HyperEVM",sym:"HYPE",explorer:"https://hyperevmscan.io"};
 const WC_PROJECT_ID="bdfbac2f1648a6b7567baf258714b4ad";   // WalletConnect/Reown projectId (public client id) — enables real wallet burns
 const TOK10=1000000000000000000n; // 10^18 (18 decimals)
+// alt.fun Zap (verified on-chain): buy(address token,uint256 usdcAmount(6dec),uint256 minOut(18dec),address referrer)=0x3f60b633
+const ALTFUN={zap:"0x693F12E9E6B35b34458793546065E8b08e0299d6",usdc:"0xb88339CB7199b77E23DB6E890353E22632Ba630f",referrer:"0x0000000000000000000000000000000000000000"};
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.e";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-05-31.altfun";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -325,7 +327,7 @@ function ladderIdx(){let i=0;for(let k=0;k<LADDER.length;k++){if(S.weight>=LADDE
 function say(line,ms){S.line=line;U.lineUntil=now()+(ms||5000);const b=$("#bubble");if(b)b.textContent=line;}
 
 /* ===== non-custodial wallet + real on-chain $FATNEKO burns (HyperEVM via WalletConnect) ===== */
-let WALLET={addr:"",bal:0,connecting:false}; let wcProvider=null;
+let WALLET={addr:"",bal:0,usdc:0,connecting:false}; let wcProvider=null;
 function walletOn(){return !!WALLET.addr;}
 async function rpcCall(method,params){
   const r=await fetch(CHAIN.rpc,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method,params})});
@@ -350,13 +352,13 @@ async function connectWallet(){
     await wcProvider.connect();
     const accts=await wcProvider.request({method:"eth_accounts"});
     WALLET.addr=(accts&&accts[0])||"";
-    if(WALLET.addr){ try{WALLET.bal=await readBalance(WALLET.addr);S.bal=WALLET.bal;}catch(e){}
+    if(WALLET.addr){ try{WALLET.bal=await readBalance(WALLET.addr);S.bal=WALLET.bal;}catch(e){} try{WALLET.usdc=await readUsdc(WALLET.addr);}catch(e){}
       sfx.win(); toast("🔗 Wallet connected",shortAddr(WALLET.addr));
       if(wcProvider.on)wcProvider.on("disconnect",()=>{WALLET={addr:"",bal:0,connecting:false};wcProvider=null;render();}); }
   }catch(e){toast("Wallet connect failed",((e&&e.message)||"").slice(0,46));sfx.err();}
   WALLET.connecting=false; render();}
 async function disconnectWallet(){try{if(wcProvider&&wcProvider.disconnect)await wcProvider.disconnect();}catch(e){} WALLET={addr:"",bal:0,connecting:false}; wcProvider=null; toast("Wallet disconnected"); render();}
-async function refreshBal(){if(WALLET.addr){try{WALLET.bal=await readBalance(WALLET.addr);S.bal=WALLET.bal;}catch(e){}}}
+async function refreshBal(){if(WALLET.addr){try{WALLET.bal=await readBalance(WALLET.addr);S.bal=WALLET.bal;}catch(e){} try{WALLET.usdc=await readUsdc(WALLET.addr);}catch(e){}}}
 // burn = ERC-20 transfer(amount) of $FATNEKO to the dead address; resolves on confirmation, throws on revert
 async function burnTx(amountTokens){
   if(!wcProvider||!WALLET.addr)throw new Error("no wallet");
@@ -367,6 +369,26 @@ async function burnTx(amountTokens){
     const rc=await rpcCall("eth_getTransactionReceipt",[txHash]).catch(()=>null);
     if(rc){if(rc.status&&BigInt(rc.status)===0n)throw new Error("burn reverted");return txHash;}}
   return txHash;}
+// ---- alt.fun buy-&-burn: spend USDC → Zap.buy $FATNEKO on the curve → burn what we got ----
+async function waitReceipt(txHash){for(let i=0;i<60;i++){await new Promise(r=>setTimeout(r,2000));const rc=await rpcCall("eth_getTransactionReceipt",[txHash]).catch(()=>null);if(rc){if(rc.status&&BigInt(rc.status)===0n)throw new Error("tx reverted on-chain");return rc;}}return null;}
+async function readRaw(token,addr){const res=await rpcCall("eth_call",[{to:token,data:"0x70a08231"+pad32(addr)},"latest"]).catch(()=>null);return res&&res!=="0x"?BigInt(res):0n;}
+async function readUsdc(addr){return Number(await readRaw(ALTFUN.usdc,addr))/1e6;}
+async function usdcAllowance(){const res=await rpcCall("eth_call",[{to:ALTFUN.usdc,data:"0xdd62ed3e"+pad32(WALLET.addr)+pad32(ALTFUN.zap)},"latest"]).catch(()=>null);return res&&res!=="0x"?BigInt(res):0n;}
+async function buyAndBurn(usdWhole){
+  if(!wcProvider||!WALLET.addr)throw new Error("no wallet");
+  const usdc=BigInt(Math.round(usdWhole*1e6));                       // USDC has 6 decimals
+  if(await usdcAllowance()<usdc){                                    // one-time max approve so later feeds skip this
+    const aTx=await wcProvider.request({method:"eth_sendTransaction",params:[{from:WALLET.addr,to:ALTFUN.usdc,data:"0x095ea7b3"+pad32(ALTFUN.zap)+"ff".repeat(32),value:"0x0"}]});
+    await waitReceipt(aTx);}
+  const before=await readRaw(TOKEN.addr,WALLET.addr);                // $FATNEKO before
+  const data="0x3f60b633"+pad32(TOKEN.addr)+usdc.toString(16).padStart(64,"0")+"0".padStart(64,"0")+pad32(ALTFUN.referrer); // buy(token,usdc,minOut=0,ref)
+  const bTx=await wcProvider.request({method:"eth_sendTransaction",params:[{from:WALLET.addr,to:ALTFUN.zap,data,value:"0x0"}]});
+  await waitReceipt(bTx);
+  const recv=(await readRaw(TOKEN.addr,WALLET.addr))-before;         // tokens actually bought
+  if(recv<=0n)throw new Error("buy returned 0 tokens");
+  const burnH=await wcProvider.request({method:"eth_sendTransaction",params:[{from:WALLET.addr,to:TOKEN.addr,data:"0xa9059cbb"+pad32(TOKEN.burn)+recv.toString(16).padStart(64,"0"),value:"0x0"}]});
+  await waitReceipt(burnH);
+  return {tokens:Number(recv/TOK10),tx:burnH};}
 
 function spend(amt){if(S.bal<amt){toast("Not enough $FATNEKO","tap + to top up (demo)");sfx.err();return false;}S.bal-=amt;return true;}
 
@@ -376,13 +398,14 @@ function grow(f,before){ // shared growth + level-up after a feed (demo or real 
   if(ladderIdx()>before){const c=LADDER[ladderIdx()];S.lastShare=`my cat ${S.name} just leveled up — now as big & heavy as ${c.e} ${c.n} (${fmtW(S.weight)}) 🐱\n\nthe dream: as big as 🌍 Earth. raise your own Fat Neko 🐾`;render();save();pushBoard();celebrate(c);return;}
   render();save();pushBoard();}
 async function feed(f){
-  if(walletOn()){                                   // REAL on-chain burn from the user's wallet
-    if((WALLET.bal||0)<f.burn){toast("Not enough $FATNEKO",`need ${fmtN(f.burn)} in your wallet`);sfx.err();return;}
-    if(feed._busy)return; feed._busy=true; toast(`🔥 Burning ${fmtN(f.burn)} $FATNEKO…`,"approve in your wallet");
-    let txHash; try{txHash=await burnTx(f.burn);}catch(e){feed._busy=false;toast("Burn failed",((e&&e.message)||"").slice(0,46));sfx.err();return;}
-    const before=ladderIdx(); await refreshBal();
-    toast("🔥 Burned on-chain!",`tx ${shortAddr(txHash)} ✓`);
-    S.lastBurnTx=txHash; feed._busy=false; grow(f,before); return;
+  if(walletOn()){                                   // REAL: buy $FATNEKO with USDC on alt.fun, then burn it
+    const cost=f.usd||0;
+    if((WALLET.usdc||0)<cost){toast("Not enough USDC",`need $${cost.toFixed(2)} USDC on HyperEVM`);sfx.err();return;}
+    if(feed._busy)return; feed._busy=true; toast(`Buying & burning $${cost.toFixed(2)} of $FATNEKO…`,"approve the tx(s) in your wallet");
+    let res; try{res=await buyAndBurn(cost);}catch(e){feed._busy=false;toast("Buy & burn failed",((e&&e.message)||"").replace(/^Error:\s*/,"").slice(0,48));sfx.err();return;}
+    const before=ladderIdx(); await refreshBal(); loadChainStats();
+    toast("🔥 Bought & burned!",`${fmtN(res.tokens)} $FATNEKO gone · tx ${shortAddr(res.tx)}`);
+    S.lastBurnTx=res.tx; feed._busy=false; grow(f,before); return;
   }
   if(!spend(f.burn))return;                          // demo path (no wallet)
   grow(f,ladderIdx());}
@@ -407,59 +430,59 @@ function buildChonkCard(){
   const W=1200,H=675,DPR=2,cv=document.createElement("canvas");cv.width=W*DPR;cv.height=H*DPR;
   const x=cv.getContext("2d");x.scale(DPR,DPR);
   const t=tier(),k=t.key,col=t.col,c=LADDER[ladderIdx()];
-  const rankN=parseInt((myRank()||"").split("/")[0],10)||0;
+  const rp=(myRank()||"").split("/"),rankN=parseInt(rp[0],10)||0,total=parseInt(rp[1],10)||0;
   const earthIdx=LADDER.findIndex(l=>l.n==="planet Earth"),goalLog=Math.log10(LADDER[earthIdx<0?LADDER.length-1:earthIdx].g);
-  const prog=clamp(Math.log10(Math.max(S.weight,1))/goalLog,0.02,1);
-  // ---- backdrop: mood-tinted gradient + glow behind the cat + drifting motes ----
+  const prog=clamp(Math.log10(Math.max(S.weight,1))/goalLog,0.02,1),pct=Math.round(prog*100);
+  // ---- backdrop: mood-tinted gradient + a big glow behind the hero cat + drifting motes ----
   const bg=x.createLinearGradient(0,0,0,H);bg.addColorStop(0,CARD_TOP[k]||"#123e37");bg.addColorStop(1,CARD_BOT[k]||"#06130f");x.fillStyle=bg;x.fillRect(0,0,W,H);
-  const gx=300,gy=360,gl=x.createRadialGradient(gx,gy,0,gx,gy,380);gl.addColorStop(0,col+"55");gl.addColorStop(.55,col+"1c");gl.addColorStop(1,col+"00");x.fillStyle=gl;x.fillRect(0,0,W,H);
-  for(let i=0;i<46;i++){const s=i*131.7,px=((Math.sin(s)*0.5+0.5)*W),py=((Math.cos(s*1.7)*0.5+0.5)*H),r=0.8+((s*3.1)%1)*2.2;x.globalAlpha=0.05+0.16*((s*5.5)%1);x.fillStyle=col;x.beginPath();x.arc(px,py,r,0,7);x.fill();}
+  const gx=270,gy=350,gl=x.createRadialGradient(gx,gy,0,gx,gy,440);gl.addColorStop(0,col+"66");gl.addColorStop(.5,col+"22");gl.addColorStop(1,col+"00");x.fillStyle=gl;x.fillRect(0,0,W,H);
+  for(let i=0;i<46;i++){const s=i*131.7,mx=((Math.sin(s)*0.5+0.5)*W),my=((Math.cos(s*1.7)*0.5+0.5)*H),r=0.8+((s*3.1)%1)*2.2;x.globalAlpha=0.05+0.16*((s*5.5)%1);x.fillStyle=col;x.beginPath();x.arc(mx,my,r,0,7);x.fill();}
   x.globalAlpha=1;
-  const sh=x.createLinearGradient(0,0,W,H);sh.addColorStop(0,"rgba(255,255,255,.06)");sh.addColorStop(.4,"rgba(255,255,255,0)");x.fillStyle=sh;x.fillRect(0,0,W,H);
-  // holographic foil sweep — faint rainbow diagonal so the card reads "collectible", not "dashboard"
   x.save();x.globalCompositeOperation="overlay";const foil=x.createLinearGradient(0,H,W,0);
-  [[0,"#ff8fd4"],[.2,"#9b8cff"],[.4,"#5ec8ff"],[.6,"#6fe9cb"],[.8,"#ffd05e"],[1,"#ff8fd4"]].forEach(([o,cc])=>foil.addColorStop(o,cc+"00"));
+  [[0,"#ff8fd4"],[.4,"#5ec8ff"],[.8,"#ffd05e"],[1,"#ff8fd4"]].forEach(([o,cc])=>foil.addColorStop(o,cc+"00"));
   foil.addColorStop(.46,"#9b8cff22");foil.addColorStop(.5,"#6fe9cb2e");foil.addColorStop(.54,"#5ec8ff22");x.fillStyle=foil;x.fillRect(0,0,W,H);x.restore();
-  // ---- the Neko himself (real character art, scaled, with shadow / crown / mood fx) ----
+  // ---- HERO cat: big, bottom-anchored, slight left bleed, glow + pedestal + shadow ----
   if(nekoReady&&NEKO_IMG.width){
-    const dh=400,sc=dh/NEKO_IMG.height,dw=NEKO_IMG.width*sc,cx=300,baseY=524;
-    // glowing pedestal disc — a premium "product shot" platform under him
-    const ped=x.createRadialGradient(cx,baseY+4,0,cx,baseY+4,dw*0.62);ped.addColorStop(0,col+"4d");ped.addColorStop(.6,col+"14");ped.addColorStop(1,col+"00");x.fillStyle=ped;x.beginPath();x.ellipse(cx,baseY+4,dw*0.6,42,0,0,7);x.fill();
-    x.fillStyle="rgba(0,0,0,.36)";x.beginPath();x.ellipse(cx,baseY+8,dw*0.46,20,0,0,7);x.fill();
-    x.imageSmoothingEnabled=false;x.drawImage(NEKO_IMG,cx-dw/2,baseY-dh,dw,dh);x.imageSmoothingEnabled=true;
-    x.textAlign="center";
-    if(isKing){x.font="46px serif";x.fillText("👑",cx,baseY-dh+10);}
-    x.font="36px serif";x.globalAlpha=.92;x.fillText(MOOD_FX[k]||"✨",cx+dw*0.44,baseY-dh*0.74);x.font="26px serif";x.fillText(MOOD_FX[k]||"✨",cx-dw*0.42,baseY-dh*0.48);x.globalAlpha=1;
-    cardPill(x,cx-((()=>{x.font="800 22px 'Nunito'";return x.measureText(t.face+"  "+t.name).width+22*0.85*2;})())/2,baseY+22,t.face+"  "+t.name,22,"rgba(8,18,15,.78)",col,col+"66");
+    const dh=558,sc=dh/NEKO_IMG.height,dw=NEKO_IMG.width*sc,cx=246,baseY=612,dx=cx-dw/2,dy=baseY-dh;
+    const ped=x.createRadialGradient(cx,baseY,0,cx,baseY,dw*0.7);ped.addColorStop(0,col+"5e");ped.addColorStop(.6,col+"18");ped.addColorStop(1,col+"00");x.fillStyle=ped;x.beginPath();x.ellipse(cx,baseY,dw*0.66,50,0,0,7);x.fill();
+    x.fillStyle="rgba(0,0,0,.42)";x.beginPath();x.ellipse(cx,baseY+6,dw*0.45,24,0,0,7);x.fill();
+    x.imageSmoothingEnabled=false;
+    x.save();x.shadowColor=col;x.shadowBlur=38;x.drawImage(NEKO_IMG,dx,dy,dw,dh);x.drawImage(NEKO_IMG,dx,dy,dw,dh);x.restore(); // colored rim-glow to lift him off the bg
+    x.drawImage(NEKO_IMG,dx,dy,dw,dh);
+    x.imageSmoothingEnabled=true;x.textAlign="center";
+    if(isKing){x.font="60px serif";x.fillText("👑",cx,dy+18);}
+    x.font="46px serif";x.globalAlpha=.95;x.fillText(MOOD_FX[k]||"✨",cx+dw*0.46,baseY-dh*0.72);x.font="32px serif";x.fillText(MOOD_FX[k]||"✨",cx-dw*0.46,baseY-dh*0.46);x.globalAlpha=1;
   }
-  // ---- right panel: kicker, name, the headline "as heavy as", rank, progress ----
-  const px=548,rightX=1158,colW=rightX-px;
-  x.textAlign="left";x.font="800 22px 'Nunito'";x.fillStyle=col;x.fillText("🐾  FAT NEKO",px,66);
-  if(S.mint){x.font="800 16px 'Nunito'";const idt="#"+S.mint+" / 10,000",iw=x.measureText(idt).width;rrp(x,rightX-iw-22,46,iw+22,30,15);x.fillStyle="rgba(8,18,15,.7)";x.fill();x.lineWidth=2;x.strokeStyle=col+"55";x.stroke();x.fillStyle="#cfeee4";x.textAlign="left";x.fillText(idt,rightX-iw-11,67);}
-  const nm=(S.name||"Fat Neko").toString();x.textAlign="left";const nf=fitFont(x,nm,58,"700","'Fredoka'",colW);x.font=`700 ${nf}px 'Fredoka'`;x.fillStyle="#eafff8";x.fillText(nm,px,138);
-  x.font="600 25px 'Fredoka'";x.fillStyle=col;x.fillText(chonkTitle(),px,176);
-  // headline stat panel — the flex
-  rrp(x,px,200,colW,158,22);x.fillStyle="rgba(6,18,14,.55)";x.fill();x.lineWidth=2;x.strokeStyle=col+"3a";x.stroke();
-  x.fillStyle="#7fd9c4";x.font="800 16px 'Nunito'";x.fillText("A S   B I G   &   H E A V Y   A S",px+26,236);
-  const big=c.e+"  "+c.n,bf=fitFont(x,big,48,"700","'Fredoka'",colW-52);x.font=`700 ${bf}px 'Fredoka'`;x.fillStyle="#eafff8";x.fillText(big,px+26,294);
-  x.font="800 21px 'Nunito'";x.fillStyle=col;x.fillText(fmtW(S.weight)+"   ·   "+fmtLen(c.m)+" big",px+26,334);
-  // rank + quick-stat row
-  let ry=400;
-  if(rankN>0){const rt=(rankN===1?"👑 #1":"🏆 #"+rankN)+"  ·  Hall of Chonk";cardPill(x,px,ry-22,rt,21,"rgba(255,208,94,.16)","#ffd05e","rgba(255,208,94,.55)");}
-  const days=Math.max(1,Math.ceil((now()-(S.born||now()))/864e5));
-  x.font="700 17px 'Nunito'";x.fillStyle="#8fb6ab";x.textAlign="left";x.fillText("🔥 "+fmtN(S.burned)+" burned    🗓 "+days+"d raised    "+t.face+" "+Math.round(S.mood)+"/100",px,ry+34);
-  // progress-to-the-dream bar
-  const by=ry+72;x.font="700 16px 'Nunito'";x.fillStyle="#8fb6ab";x.fillText("the dream",px,by-8);x.textAlign="right";x.fillText("🌍 Earth",rightX,by-8);x.textAlign="left";
-  rrp(x,px,by,colW,16,8);x.fillStyle="rgba(255,255,255,.08)";x.fill();
-  const pgrad=x.createLinearGradient(px,0,rightX,0);pgrad.addColorStop(0,"#6fe9cb");pgrad.addColorStop(1,"#ffd05e");rrp(x,px,by,Math.max(16,colW*prog),16,8);x.fillStyle=pgrad;x.fill();
-  // ---- footer band: the pitch + CTA ----
-  const fy=590;x.strokeStyle="rgba(255,255,255,.1)";x.lineWidth=1.5;x.beginPath();x.moveTo(40,fy);x.lineTo(W-40,fy);x.stroke();
-  x.textAlign="left";x.font="700 24px 'Fredoka'";x.fillStyle="#eafff8";x.fillText("Raise your own chonky cat 🐾",48,fy+34);
-  x.font="700 15px 'Nunito'";x.fillStyle="#8fb6ab";x.fillText("Tamagotchi × AI crypto sidekick · free on Telegram",48,fy+58);
-  cardPill(x,W-300,fy+18,"▶  Play free",18,"#6fe9cb","#08130f",null);
-  x.textAlign="right";x.font="800 22px 'Nunito'";x.fillStyle="#ffd05e";x.fillText("$FATNEKO",W-48,fy+58);
-  // ---- collectible frame: a soft vignette, a glowing inner border, and corner ticks ----
-  const vg=x.createRadialGradient(W/2,H*0.46,H*0.34,W/2,H*0.5,H*0.82);vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,.34)");x.fillStyle=vg;x.fillRect(0,0,W,H);
+  // ---- right column: name eyebrow → GIANT flex → Earth arc → challenge ----
+  const px=556,rightX=1156,colW=rightX-px;x.textAlign="left";
+  const nm=(S.name||"Fat Neko").toString(),nf=fitFont(x,nm,34,"700","'Fredoka'",colW-150);x.font=`700 ${nf}px 'Fredoka'`;x.fillStyle="#eafff8";x.fillText(nm,px,86);
+  if(S.mint){x.font="800 15px 'Nunito'";const idt="#"+S.mint,iw=x.measureText(idt).width;rrp(x,rightX-iw-20,62,iw+20,28,14);x.fillStyle="rgba(8,18,15,.66)";x.fill();x.lineWidth=2;x.strokeStyle=col+"55";x.stroke();x.fillStyle="#cfeee4";x.fillText(idt,rightX-iw-10,81);}
+  x.font="700 18px 'Nunito'";x.fillStyle=col;x.fillText(t.face+"  "+chonkTitle().replace(/^\S+\s/,"").toUpperCase(),px,116);
+  // the flex — ONE flowing statement that lands the punchline, with a glossy gold hero line
+  x.font="600 29px 'Fredoka'";x.fillStyle="#dff7ee";x.fillText("My cat is now as heavy as",px,150);
+  const big=c.e+"  "+c.n,bf=fitFont(x,big,84,"700","'Fredoka'",colW),byb=150+bf*0.9;
+  x.font=`700 ${bf}px 'Fredoka'`;
+  x.save();x.shadowColor="rgba(0,0,0,.5)";x.shadowBlur=12;x.shadowOffsetY=3;x.fillStyle="#ffcf52";x.fillText(big,px,byb);x.restore();
+  x.save();x.beginPath();x.rect(px-12,byb-bf*0.9,colW+24,bf*0.46);x.clip();x.fillStyle="#fff1c2";x.fillText(big,px,byb);x.restore(); // top-half gloss → beveled metallic gold
+  const subY=byb+30;x.font="800 17px 'Nunito'";x.fillStyle=col;x.fillText(fmtW(S.weight).toUpperCase()+"  OF PURE CHONK  ·  "+fmtLen(c.m)+" BIG",px,subY);
+  // Earth arc — the escalating-absurdity hook (bus → 🌍), made loud, with a glossy bar
+  const aY=subY+54;x.font="800 21px 'Nunito'";x.fillStyle="#eafff8";x.fillText("🌍 NEXT STOP: EARTH-SIZED",px,aY);
+  x.textAlign="right";x.font="800 21px 'Nunito'";x.fillStyle=col;x.fillText(pct+"%",rightX,aY);x.textAlign="left";
+  const by=aY+16;rrp(x,px,by,colW,22,11);x.fillStyle="rgba(0,0,0,.28)";x.fill();
+  const pg=x.createLinearGradient(px,0,rightX,0);pg.addColorStop(0,"#6fe9cb");pg.addColorStop(1,"#ffd05e");rrp(x,px,by,Math.max(22,colW*prog),22,11);x.fillStyle=pg;x.fill();
+  rrp(x,px+3,by+3,Math.max(16,colW*prog-6),8,4);x.fillStyle="rgba(255,255,255,.3)";x.fill(); // top gloss on the fill
+  // challenge — turns a stat into a dunk that begs a quote-tweet (hide tiny totals)
+  const ch=rankN===1?"👑 #1 — come dethrone me":rankN>0?"🏆 #"+rankN+(total>=25?" of "+fmtN(total):"")+" — can you out-chonk me?":"🐾 can you out-chonk me?";
+  cardPill(x,px,by+44,ch,21,"rgba(255,208,94,.18)","#ffd05e","rgba(255,208,94,.6)");
+  // ---- footer: lead with the MECHANIC (burn to grow), not a generic button ----
+  const fy=602,fL=px;const fnp=x.createLinearGradient(fL,0,W-44,0);fnp.addColorStop(0,"rgba(255,255,255,.05)");fnp.addColorStop(1,"rgba(255,255,255,0)");
+  rrp(x,fL,fy,W-44-fL,52,12);x.fillStyle=fnp;x.fill();x.lineWidth=1;x.strokeStyle="rgba(255,255,255,.08)";x.stroke();
+  x.font="700 21px 'Fredoka'";x.fillStyle="#eafff8";x.fillText("🔥 Burn ",fL+16,fy+33);
+  let xo=fL+16+x.measureText("🔥 Burn ").width;x.fillStyle="#ffd05e";x.font="800 21px 'Nunito'";x.fillText("$FATNEKO",xo,fy+33);
+  xo+=x.measureText("$FATNEKO").width;x.fillStyle="#eafff8";x.font="700 21px 'Fredoka'";x.fillText(" to grow your own",xo,fy+33);
+  x.textAlign="right";x.font="800 17px 'Nunito'";x.fillStyle=col;x.fillText("▶ free on Telegram · @FatNekoBot",W-60,fy+33);x.textAlign="left";
+  // ---- collectible frame: vignette + glowing inner border + corner ticks ----
+  const vg=x.createRadialGradient(W/2,H*0.46,H*0.34,W/2,H*0.5,H*0.84);vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,.36)");x.fillStyle=vg;x.fillRect(0,0,W,H);
   x.save();x.shadowColor=col+"66";x.shadowBlur=14;rrp(x,14,14,W-28,H-28,22);x.lineWidth=2;x.strokeStyle=col+"73";x.stroke();x.restore();
   rrp(x,14,14,W-28,H-28,22);x.lineWidth=1;x.strokeStyle="rgba(255,255,255,.10)";x.stroke();
   x.strokeStyle=col;x.lineWidth=3;x.lineCap="round";const cm=30,cl=26;
@@ -1317,14 +1340,14 @@ function render(){topbar();renderTabs();
     <div class="foot" style="text-align:left;margin:7px 0 0">Share your link — every friend who hatches a neko helps the whole colony grow $FATNEKO faster. 🔥</div>
   </div>
   <div class="card"><h2 style="font-family:'Fredoka';font-size:19px;margin:0 0 2px">🍣 Feed ${S.name}</h2>
-    <div class="foot" style="text-align:left;margin:0 0 8px">${walletOn()?`Each feed <b>burns real $FATNEKO</b> from your wallet on-chain 🔥 — gone forever, bigger Neko.`:`Each feed burns $FATNEKO 🔥 — bigger burn, bigger Neko.`}</div>
+    <div class="foot" style="text-align:left;margin:0 0 8px">${walletOn()?`Each feed <b>buys $FATNEKO with USDC on alt.fun &amp; burns it</b> 🔥 — real buy pressure + a permanently shrinking supply.`:`Each feed buys $FATNEKO 🔥 — bigger burn, bigger Neko.`}</div>
     <div class="aistat ${walletOn()?'ok':''}" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
-      <span>${walletOn()?`🔗 ${shortAddr(WALLET.addr)} · <b>${fmtN(WALLET.bal)}</b> $FATNEKO`:(WALLET.connecting?`🔗 connecting…`:`🔥 Connect a wallet to burn real $FATNEKO`)}</span>
+      <span>${walletOn()?`🔗 ${shortAddr(WALLET.addr)} · <b>$${(WALLET.usdc||0).toFixed(2)}</b> USDC`:(WALLET.connecting?`🔗 connecting…`:`🔥 Connect a wallet to buy &amp; burn real $FATNEKO`)}</span>
       ${walletOn()?`<a onclick="window.__walletDisconnect()">disconnect</a>`:`<button class="buy" onclick="window.__wallet()" ${WALLET.connecting?'disabled':''}>Connect</button>`}
     </div>
     ${FOODS.map(f=>`<div class="item"><div class="e">${f.e}</div><div class="info"><div class="t">${f.n} <span class="rar ${f.rar}">${f.rar}</span></div>
-      <div class="d">🔥 burns ${fmtN(f.burn)} · +${f.mood} mood</div></div><button class="buy" data-feed="${f.id}">${walletOn()?'Burn':'Feed'}<small>🔥 ${fmtN(f.burn)}</small></button></div>`).join("")}
-    ${walletOn()?`<div class="foot" style="text-align:left;margin:6px 0 0">Burns are real transactions on ${CHAIN.name} — you'll approve each in your wallet, and need a little ${CHAIN.sym} for gas. ${S.lastBurnTx?`Last: <a href="${TOKEN.explorer}/tx/${S.lastBurnTx}" target="_blank">${shortAddr(S.lastBurnTx)}</a>`:''}</div>`:''}
+      <div class="d">${walletOn()?`💵 $${f.usd.toFixed(2)} → buy &amp; burn`:`🔥 burns ${fmtN(f.burn)}`} · +${f.mood} mood</div></div><button class="buy" data-feed="${f.id}">${walletOn()?'Burn':'Feed'}<small>${walletOn()?`$${f.usd.toFixed(2)}`:`🔥 ${fmtN(f.burn)}`}</small></button></div>`).join("")}
+    ${walletOn()?`<div class="foot" style="text-align:left;margin:6px 0 0">Real txns on ${CHAIN.name} via alt.fun — you approve each in your wallet (USDC + a little ${CHAIN.sym} for gas). First feed also does a one-time USDC approval. ${S.lastBurnTx?`Last burn: <a href="${TOKEN.explorer}/tx/${S.lastBurnTx}" target="_blank">${shortAddr(S.lastBurnTx)}</a>`:''}</div>`:''}
   </div>
   <div class="card"><h2 style="font-family:'Fredoka';font-size:19px;margin:0 0 4px">🏆 Hall of Chonk</h2>
     <div class="foot" style="text-align:left;margin:0 0 8px">Heaviest nekos in the colony — feed yours to climb the ranks.</div>
