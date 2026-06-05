@@ -231,7 +231,7 @@ const ALTFUN={zap:"0x693F12E9E6B35b34458793546065E8b08e0299d6",usdc:"0xb88339CB7
 const shortAddr=a=>a.slice(0,6)+"…"+a.slice(-4);
 // Telegram bot/mini-app handle for invite deep links (set to the real bot at deploy time)
 const APP={bot:"FatNekoBot",app:"app"};
-const BUILD="2026-05-31.tease";  // bump on every change so a stale cache is visible & reloadable
+const BUILD="2026-06-04.freekey";  // bump on every change so a stale cache is visible & reloadable
 function inviteLink(){return `https://t.me/${APP.bot}/${APP.app}?startapp=ref_${S.pid||"new"}`;}
 
 /* ===== mood tiers (high → low). he NEVER dies — just gets ruder. ===== */
@@ -593,6 +593,23 @@ function showWelcome(){
    <button class="btn mint" onclick="window.__welcomeDone()">Let's raise him 🚀</button>`);
   setTimeout(()=>{const w=$("#wname");if(w)w.focus();},120);}
 window.__welcomeDone=()=>{const w=$("#wname");const v=w&&w.value.trim();if(v)S.name=v.slice(0,14);S.onboarded=true;save();closeModal();render();pushBoard();sfx.win();confetti("🐱");say("mrrp! i'm "+S.name+". feed me and let's get RICH 😼",6000);};
+function openExt(u){try{if(TG&&TG.openLink&&tgHas("6.1"))TG.openLink(u);else window.open(u,"_blank","noopener");}catch(e){window.open(u,"_blank","noopener");}}
+window.__ext=(u)=>{openExt(u);return false;};
+// First time on the Agent tab without a brain connected: show how to grab a FREE key.
+function showAgentTip(){
+  S.agentTipSeen=true;save();sfx.ok();
+  const L=(u,t)=>`<a onclick="return window.__ext('${u}')" style="color:var(--mint);font-weight:800;cursor:pointer">${t}</a>`;
+  modal(`<div class="big-e">🔑😼</div><h3>give me a real brain — free</h3>
+   <p style="text-align:left;line-height:1.65">i run on built-in cat replies until you plug in an <b>AI key</b>. no key? grab a <b>free</b> one in ~1 min — then paste it in ⚙️ Setup:
+   <br><br>⚡ <b>Groq</b> — free &amp; fast, easiest. ${L('https://console.groq.com/keys','console.groq.com')} → create key (<code>gsk_…</code>) → pick <b>Groq</b>.
+   <br><br>✨ <b>Google Gemini</b> — generous free tier. ${L('https://aistudio.google.com/apikey','aistudio.google.com')} → key (<code>AIza…</code>) → pick <b>Gemini</b>.
+   <br><br>🌐 <b>OpenRouter</b> — free models. ${L('https://openrouter.ai/keys','openrouter.ai')} → key <code>sk-or-…</code> → set a <code>:free</code> model.
+   <br><br>💎 <b>MiniMax</b> — free trial credits on signup.
+   <br><br>already have an <b>OpenAI / Anthropic</b> key? just paste it in ⚙️ Setup 👇</p>
+   <button class="btn mint" onclick="window.__close();window.__setup()">Set up my key 🔑</button>
+   <button class="btn ghost" onclick="window.__close()" style="margin-top:8px">maybe later</button>`);
+}
+window.__agentTip=showAgentTip;
 function celebrate(c){confetti(c.e);sfx.win();
   modal(`<div class="big-e lvlbig">${c.e}</div><h3>LEVEL UP! 🎉</h3>
    <p>${S.name} is now as big &amp; heavy as <b style="color:var(--mint)">${c.n}</b><br>${fmtW(S.weight)} · ${fmtLen(c.m)} across</p>
@@ -713,7 +730,7 @@ function renderTabs(){
   const tabs=[["neko","🐱","Neko"],["profile","👤","Profile"],["agent","🤖","Agent"]];
   $("#tabbar").innerHTML=tabs.map(([id,e,l])=>`<button class="tab ${U.tab===id?'on':''}" onclick="window.__tab('${id}')"><span class="ti">${e}</span><span>${l}</span></button>`).join("");
 }
-function setTab(t){U.tab=t;render();}
+function setTab(t){U.tab=t;render();if(t==="agent"&&!S.agentTipSeen&&!aiActive())setTimeout(showAgentTip,500);}
 function myRank(){
   const map={}; const realCount=Object.keys(BOARD).filter(p=>p!==S.pid).length;
   if(realCount<5)LEADER_SEED.forEach(s=>map["seed:"+s.mint]={weight:s.weight});
@@ -752,9 +769,10 @@ function renderProfile(){
 const AI_PROVIDERS={
   claude:{label:"Claude (Anthropic)",shape:"anthropic",base:"https://api.anthropic.com/v1/messages",model:"claude-sonnet-4-20250514",search:true,hint:"sk-ant-…"},
   openai:{label:"OpenAI (GPT)",shape:"responses",base:"https://api.openai.com/v1/responses",model:"gpt-4o",search:true,hint:"sk-…"},
+  gemini:{label:"Google Gemini (free tier)",shape:"chat",base:"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",model:"gemini-2.5-flash",search:false,hint:"AIza… (free at aistudio.google.com)"},
   deepseek:{label:"DeepSeek",shape:"chat",base:"https://api.deepseek.com/v1/chat/completions",model:"deepseek-chat",search:false,hint:"sk-…"},
   minimax:{label:"MiniMax",shape:"chat",base:"https://api.minimax.io/v1/text/chatcompletion_v2",model:"MiniMax-M2",search:false,hint:"api key"},
-  groq:{label:"Groq",shape:"chat",base:"https://api.groq.com/openai/v1/chat/completions",model:"llama-3.3-70b-versatile",search:false,hint:"gsk_…"},
+  groq:{label:"Groq (free)",shape:"chat",base:"https://api.groq.com/openai/v1/chat/completions",model:"llama-3.3-70b-versatile",search:false,hint:"gsk_… (free at console.groq.com)"},
   xai:{label:"xAI (Grok)",shape:"chat",base:"https://api.x.ai/v1/chat/completions",model:"grok-2-latest",search:false,hint:"xai-…"},
   mistral:{label:"Mistral",shape:"chat",base:"https://api.mistral.ai/v1/chat/completions",model:"mistral-large-latest",search:false,hint:"api key"},
   openrouter:{label:"OpenRouter (any model)",shape:"chat",base:"https://openrouter.ai/api/v1/chat/completions",model:"openai/gpt-4o-mini",search:false,hint:"sk-or-…"},
