@@ -645,7 +645,7 @@ function celebrate(c){confetti(c.e);sfx.win();
   modal(`<div class="big-e lvlbig">${c.e}</div><h3>LEVEL UP! 🎉</h3>
    <p>${S.name} is now as big &amp; heavy as <b style="color:var(--mint)">${c.n}</b><br>${fmtW(S.weight)} · ${fmtLen(c.m)} across</p>
    <button class="btn mint" onclick="window.__share()" style="margin-bottom:8px">𝕏 Flex my chonk</button>
-   <button class="btn ghost" onclick="window.__celebDone()">${unlockQ.length?"See what unlocked 🎀":"Keep feeding 🍣"}</button>`);}
+   <button class="btn ghost" onclick="window.__celebDone()">${unlockQ.length?"See what unlocked 💎":"Keep feeding 🍣"}</button>`);}
 window.__celebDone=()=>{if(unlockQ.length)flushUnlock();else closeModal();};
 
 /* ===== pixel neko with mood face ===== */
@@ -784,11 +784,11 @@ function checkUnlocks(defer){
 function flushUnlock(){
   if(!unlockQ.length){closeModal();return;}
   const c=unlockQ.shift(), slot=SLOT_BY_ID[c.slot];
-  confetti("🎀");sfx.win();
-  modal(`<div class="big-e">🎀</div><h3>New outfit unlocked!</h3>
+  confetti("💎");sfx.win();
+  modal(`<div class="big-e">💎</div><h3>New outfit unlocked!</h3>
    <p><b style="color:var(--mint)">${c.name}</b> · ${slot.e} ${slot.name.toLowerCase()} <span class="rar ${c.rar}">${c.rar}</span><br>${unlockText(c)}</p>
    <canvas id="ucv" width="150" height="150" style="display:block;margin:0 auto 12px;border-radius:14px;border:var(--bd);background:linear-gradient(180deg,#123027,#081814)"></canvas>
-   <button class="btn mint" onclick="window.__wearNow('${c.id}')" style="margin-bottom:8px">Wear it 🪞</button>
+   <button class="btn mint" onclick="window.__wearNow('${c.id}')" style="margin-bottom:8px">Wear it 💎</button>
    <button class="btn ghost" onclick="window.__unlockNext()">${unlockQ.length?"Next ("+unlockQ.length+")":"Later"}</button>`);
   const eq=Object.assign({},S.equipped);eq[c.slot]=c.id;
   previewInto("ucv",eq);
@@ -804,7 +804,7 @@ const QUESTS=[
   {id:"ask",   n:"Ask your agent anything", goal:1,yarn:12,e:"🤖"},
   {id:"share", n:"Share your chonk card",   goal:1,yarn:20,e:"𝕏"},
   {id:"invite",n:"Invite a friend",         goal:1,yarn:25,e:"🎁"},
-  {id:"dress", n:"Change your outfit",      goal:1,yarn:8, e:"🎀"}
+  {id:"dress", n:"Change your outfit",      goal:1,yarn:8, e:"💎"}
 ];
 const Q_BY_ID={}; QUESTS.forEach(q=>Q_BY_ID[q.id]=q);
 // Deterministic from the date: stable across reloads, and identical for every player
@@ -841,7 +841,7 @@ function buyCos(id){
   const c=COS_BY_ID[id];if(!c||owns(id))return;
   if((S.yarn||0)<c.yarn){toast("Not enough yarn 🧶",`${c.yarn-(S.yarn||0)} more to go`);sfx.err();return;}
   S.yarn-=c.yarn;S.owned.push(id);S.equipped[c.slot]=id;
-  toast(`🎀 ${c.name}!`,`-🧶 ${c.yarn} · now wearing it`);sfx.win();confetti("🎀");
+  toast(`💎 ${c.name}!`,`-🧶 ${c.yarn} · now wearing it`);sfx.win();confetti("💎");
   save();openWardrobe(c.slot);
 }
 function buyFreeze(){
@@ -869,7 +869,7 @@ function openWardrobe(slot){
       <div class="wu">${has?(on?"worn":"tap to wear"):(buyable?"🧶 "+c.yarn:unlockText(c))}</div></div>`;};
   const owned=(S.owned||[]).length;
   modal(`<div class="wr">
-    <h3 style="margin-bottom:8px">🪞 Wardrobe</h3>
+    <h3 style="margin-bottom:8px">💎 Wardrobe</h3>
     <div class="wrtop">
       <canvas id="wrprev" class="wrprev" width="130" height="130"></canvas>
       <div class="wrmeta">
@@ -1056,7 +1056,7 @@ function renderProfile(){
       <div class="stat"><div class="k">🏆 Hall of Chonk</div><div class="v">#${myRank()}</div></div>
       <div class="stat"><div class="k">🔥 Day streak</div><div class="v">${S.streak||0}</div></div>
       <div class="stat"><div class="k">Times fed</div><div class="v">${S.feeds||0}</div></div>
-      <div class="stat"><div class="k">🎀 Wardrobe</div><div class="v">${(S.owned||[]).length}/${COSMETICS.length}</div></div>
+      <div class="stat"><div class="k">💎 Wardrobe</div><div class="v">${(S.owned||[]).length}/${COSMETICS.length}</div></div>
       <div class="stat"><div class="k">🧶 Yarn</div><div class="v">${S.yarn||0}</div></div>
       <div class="stat"><div class="k">Raising for</div><div class="v">${days} day${days>1?"s":""}</div></div>
     </div>
@@ -1645,7 +1645,7 @@ function render(){topbar();renderTabs();
     <div class="actions">
       <button class="btn pink" data-act="pet">😻 Pet</button>
       <button class="btn blue" data-act="play">🎣 Play</button>
-      <button class="btn gold" data-act="fit">🪞 Dress</button>
+      <button class="btn gold" data-act="fit">💎 Dress</button>
       <button class="btn mint" data-act="share">𝕏 Share</button>
     </div>
     <div class="immortal">🛡️ Fat Neko can't die — neglect just makes him increasingly unhappy &amp; rude.</div>
@@ -1657,7 +1657,7 @@ function render(){topbar();renderTabs();
     <div class="foot" style="text-align:left;margin:7px 0 0">Check in daily to cheer ${S.name} up, earn 🧶 yarn &amp; keep your streak. He only <i>grows</i> from real $FATNEKO burns — feed him to grow.</div>
   </div>
   <div class="card daily">
-    <div class="drow"><div><div class="dtit">🎀 Wardrobe</div>
+    <div class="drow"><div><div class="dtit">💎 Wardrobe</div>
       <div class="dsub">${(S.owned||[]).length}/${COSMETICS.length} unlocked · 🧶 ${S.yarn||0} yarn</div></div>
       <button class="btn gold" style="flex:0 0 auto;width:auto;padding:11px 18px" onclick="window.__wardrobe()">Dress up</button></div>
     <div class="foot" style="text-align:left;margin:7px 0 6px">Today's quests — finish them for 🧶 yarn to spend in the wardrobe shop.</div>
