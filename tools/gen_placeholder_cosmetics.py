@@ -31,6 +31,11 @@ EYE_L, EYE_R = 186, 264       # individual eye centres
 COLLAR_Y = 268                # bottom of the face patch — reads as the chin line
 BODY_CX = 198
 BODY_TOP, BODY_BOT = 265, 383
+# Held items must OVERLAP the body silhouette to read as held — the cat has no
+# visible paws, so anything floating clear of the outline just looks detached.
+HAND_X = 300                  # held items sit to the cat's left in frame (our right)
+OFF_X = 74                    # off-hand items mirror them on the far side
+HELD_Y = 318                  # belly height — held things hang beside the body, not the head
 
 # --- palette, harmonised with the base sprite -------------------------------
 K = (0, 0, 0, 255)            # outline
@@ -51,6 +56,18 @@ GREY = (127, 140, 154, 255)
 GREY_D = (74, 86, 98, 255)
 DARK = (28, 38, 44, 255)
 PINK = (255, 143, 212, 255)
+SILVER = (198, 208, 218, 255)
+SILVER_D = (132, 146, 160, 255)
+GREEN = (110, 200, 120, 255)
+GREEN_D = (58, 138, 78, 255)
+BLACK = (24, 24, 30, 255)
+CHAR = (52, 52, 62, 255)       # charcoal — goth/alt fills that still read against the outline
+CREAM = (245, 232, 200, 255)
+NAVY = (46, 62, 122, 255)
+MAROON = (140, 44, 62, 255)
+LIME = (198, 240, 90, 255)
+CYAN = (120, 240, 240, 255)
+LILAC = (198, 170, 255, 255)
 
 
 class Art:
@@ -368,6 +385,474 @@ def boba(a):
         a.raw(x + dx, y + dy, 13, 13, DARK)             # pearls
 
 
+# ===========================================================================
+# Themed sets. Each set covers enough slots that a full outfit is wearable,
+# which is what makes "collect the set" mean anything in the wardrobe UI.
+# ===========================================================================
+
+def _dome(a, col, h, w=78, y=None):
+    """Rounded hat crown sitting on the head."""
+    y = HAT_Y if y is None else y
+    a.ellipse(HEAD_CX, y - h // 2, w, h // 2, col)
+    a.r(HEAD_CX - w, y - h // 2, w * 2, h // 2, col)
+
+
+def _brim(a, col, w=100, h=18, y=None):
+    y = HAT_Y if y is None else y
+    a.r(HEAD_CX - w, y - h, w * 2, h, col)
+
+
+def _torso(a, col, h=88, w=104, top=None):
+    """A body garment covering the chest."""
+    top = COLLAR_Y - 6 if top is None else top
+    a.r(BODY_CX - w, top, w * 2, h, col)
+
+
+def _shaft(a, col, x, top, bot, w=20):
+    """Vertical handle for held weapons and tools."""
+    a.r(x - w // 2, top, w, bot - top, col)
+
+
+# ---------------------------- FANTASY (LOTR) -------------------------------
+@item
+def helm_knight(a):
+    _dome(a, SILVER, 74, 80)
+    a.r(HEAD_CX - 80, HAT_Y - 26, 160, 26, SILVER_D)      # brow band
+    a.raw(HEAD_CX - 7, HAT_Y - 20, 15, 74, SILVER_D)      # nose guard
+    a.r(HEAD_CX - 12, HAT_Y - 92, 24, 34, RED)            # plume socket
+    a.tri(HEAD_CX, HAT_Y - 140, 20, HAT_Y - 86, RED)      # plume
+
+
+@item
+def plate_armor(a):
+    _torso(a, SILVER, h=92, w=106)
+    a.r(BODY_CX - 128, COLLAR_Y - 2, 52, 44, SILVER_D)    # pauldrons
+    a.r(BODY_CX + 76, COLLAR_Y - 2, 52, 44, SILVER_D)
+    a.raw(BODY_CX - 6, COLLAR_Y + 12, 12, 76, SILVER_D)   # centre seam
+    a.r(BODY_CX - 106, COLLAR_Y + 64, 212, 18, GOLD)      # belt
+
+
+@item
+def sword(a):
+    _shaft(a, SILVER, HAND_X, HELD_Y - 150, HELD_Y + 20, 26)      # blade
+    a.raw(HAND_X - 14, HELD_Y - 150, 28, 22, SILVER_D)            # tip highlight
+    a.r(HAND_X - 46, HELD_Y + 16, 92, 18, GOLD)                   # crossguard
+    _shaft(a, BROWN, HAND_X, HELD_Y + 32, HELD_Y + 80, 18)        # grip
+    a.raw(HAND_X - 13, HELD_Y + 76, 26, 18, GOLD)                 # pommel
+
+
+@item
+def shield_kite(a):
+    cx, top = OFF_X, HELD_Y - 96
+    a.r(cx - 46, top, 92, 96, SILVER)
+    a.tri(cx, top + 172, 46, top + 92, SILVER)            # tapered point
+    a.r(cx - 46, top, 92, 20, SILVER_D)
+    a.raw(cx - 9, top + 24, 18, 92, RED)                  # cross device
+    a.raw(cx - 34, top + 50, 68, 18, RED)
+
+
+@item
+def cloak_ranger(a):
+    a.r(BODY_CX - 92, COLLAR_Y - 14, 184, 26, GREEN_D)    # shoulder yoke
+    a.tri(BODY_CX, BODY_BOT + 6, 150, COLLAR_Y + 6, GREEN)
+    a.r(BODY_CX - 150, BODY_BOT - 24, 300, 22, GREEN_D)   # hem
+
+
+@item
+def circlet_elven(a):
+    a.r(HEAD_CX - 72, HAT_Y - 22, 144, 16, GOLD)
+    a.raw(HEAD_CX - 11, HAT_Y - 34, 22, 22, CYAN)         # brow gem
+    a.raw(HEAD_CX - 52, HAT_Y - 28, 10, 10, GOLD)
+    a.raw(HEAD_CX + 42, HAT_Y - 28, 10, 10, GOLD)
+
+
+@item
+def hood_ranger(a):
+    _dome(a, GREEN_D, 86, 92)
+    a.r(HEAD_CX - 96, HAT_Y - 30, 192, 46, GREEN)         # cowl draping past the ears
+    a.r(HEAD_CX - 96, HAT_Y + 8, 40, 46, GREEN_D)
+    a.r(HEAD_CX + 56, HAT_Y + 8, 40, 46, GREEN_D)
+
+
+@item
+def bow_elven(a):
+    x = HAND_X + 10
+    # stepped limbs give the recurve its curve without antialiasing
+    for i, (dy, off) in enumerate(((-120, 0), (-74, 12), (-26, 20), (26, 20), (74, 12), (120, 0))):
+        a.raw(x + off - 11, HELD_Y + dy, 22, 48, BROWN)
+    a.raw(x - 16, HELD_Y - 120, 7, 240, CREAM)            # string
+
+
+@item
+def axe_dwarf(a):
+    _shaft(a, BROWN, HAND_X, HELD_Y - 96, HELD_Y + 74, 20)
+    a.r(HAND_X - 60, HELD_Y - 102, 60, 74, SILVER)        # bit
+    a.r(HAND_X, HELD_Y - 102, 44, 74, SILVER_D)
+    a.raw(HAND_X - 60, HELD_Y - 76, 20, 30, SILVER_D)
+
+
+@item
+def staff_wizard(a):
+    _shaft(a, BROWN, HAND_X, HELD_Y - 120, BODY_BOT + 8, 20)
+    a.ellipse(HAND_X, HELD_Y - 134, 30, 28, LILAC)        # crystal
+    a.raw(HAND_X - 10, HELD_Y - 144, 14, 14, WHITE)
+
+
+# ------------------------------- Y2K ---------------------------------------
+@item
+def clips_butterfly(a):
+    for dx, col in ((-72, PINK), (66, CYAN)):
+        cx = HEAD_CX + dx
+        a.tri(cx - 14, HAT_Y - 66, 18, HAT_Y - 30, col)
+        a.tri(cx + 14, HAT_Y - 66, 18, HAT_Y - 30, col)
+        a.raw(cx - 5, HAT_Y - 62, 10, 34, WHITE)
+
+
+@item
+def shades_tiny(a):
+    for cx in (EYE_L, EYE_R):
+        a.raw(cx - 20, EYE_CY - 9, 40, 20, PINK)
+        a.raw(cx - 16, EYE_CY - 5, 32, 12, LILAC)
+    a.raw(EYE_L + 20, EYE_CY - 3, 44, 7, PINK)
+
+
+@item
+def vest_puffer(a):
+    for i in range(4):                                     # quilted horizontal baffles
+        a.r(BODY_CX - 100, COLLAR_Y + 2 + i * 22, 200, 18, LILAC)
+    a.r(BODY_CX - 100, COLLAR_Y - 12, 200, 18, CYAN)       # collar
+    a.raw(BODY_CX - 6, COLLAR_Y + 2, 12, 88, CYAN)         # zip
+
+
+@item
+def flip_phone(a):
+    x, y = HAND_X, HELD_Y - 34
+    a.r(x - 30, y, 60, 60, PINK)
+    a.r(x - 30, y + 58, 60, 56, LILAC)
+    a.raw(x - 20, y + 10, 40, 34, CYAN)                    # screen
+    a.raw(x - 20, y + 68, 40, 34, WHITE)                   # keypad
+
+
+@item
+def trucker_hat(a):
+    _dome(a, WHITE, 52, 74)
+    a.r(HEAD_CX - 74, HAT_Y - 30, 148, 30, PINK)           # foam front panel
+    a.r(HEAD_CX - 140, HAT_Y - 16, 78, 18, PINK)           # flat brim
+    a.raw(HEAD_CX - 24, HAT_Y - 26, 48, 16, CYAN)
+
+
+# --------------------------- STREETWEAR ------------------------------------
+@item
+def snapback(a):
+    _dome(a, CHAR, 54, 76)
+    a.r(HEAD_CX - 76, HAT_Y - 22, 152, 22, BLACK)
+    a.r(HEAD_CX + 60, HAT_Y - 20, 92, 20, BLACK)           # flat brim, worn forward
+    a.raw(HEAD_CX - 26, HAT_Y - 48, 52, 18, LIME)          # logo patch
+
+
+@item
+def chain_gold(a):
+    for i, dx in enumerate(range(-70, 82, 22)):
+        dip = abs(i - 3) * 6
+        a.raw(BODY_CX + dx, COLLAR_Y + 34 - dip, 20, 20, GOLD)
+    a.raw(BODY_CX - 16, COLLAR_Y + 52, 32, 32, GOLD_D)     # pendant
+
+
+@item
+def bucket_hat(a):
+    _dome(a, LIME, 46, 76)
+    a.r(HEAD_CX - 108, HAT_Y - 20, 216, 26, GREEN)         # downturned brim
+    a.r(HEAD_CX - 78, HAT_Y - 34, 156, 14, GREEN_D)
+
+
+@item
+def boombox(a):
+    x, y = HAND_X - 6, HELD_Y - 26
+    a.r(x - 56, y, 112, 78, CHAR)
+    a.ellipse(x - 28, y + 38, 22, 22, SILVER)              # speakers
+    a.ellipse(x + 28, y + 38, 22, 22, SILVER)
+    a.raw(x - 20, y + 8, 40, 16, LIME)                     # tape deck
+    a.raw(x - 46, y - 26, 92, 8, SILVER_D)                 # handle
+
+
+@item
+def puffer_jacket(a):
+    for i in range(5):
+        a.r(BODY_CX - 112, COLLAR_Y - 4 + i * 21, 224, 17, ORANGE)
+    a.r(BODY_CX - 96, COLLAR_Y - 22, 192, 20, (214, 120, 58, 255))
+    a.raw(BODY_CX - 6, COLLAR_Y - 4, 12, 106, SILVER)
+
+
+# --------------------------- WORLD CUP -------------------------------------
+@item
+def jersey(a):
+    _torso(a, WHITE, h=92, w=104)
+    for dx in (-72, -24, 24, 72):                          # vertical stripes
+        a.raw(BODY_CX + dx - 11, COLLAR_Y - 6, 22, 92, BLUE)
+    a.r(BODY_CX - 104, COLLAR_Y - 6, 208, 18, NAVY)        # collar
+    a.raw(BODY_CX - 14, COLLAR_Y + 34, 28, 40, NAVY)       # squad number
+
+
+@item
+def soccer_ball(a):
+    cx, cy = HAND_X + 4, HELD_Y + 34
+    a.ellipse(cx, cy, 46, 46, WHITE)
+    a.raw(cx - 13, cy - 24, 26, 26, BLACK)                 # pentagons
+    a.raw(cx - 34, cy + 6, 20, 20, BLACK)
+    a.raw(cx + 14, cy + 6, 20, 20, BLACK)
+
+
+@item
+def headband_sport(a):
+    a.r(HEAD_CX - 78, HAT_Y + 2, 156, 26, WHITE)
+    a.raw(HEAD_CX - 78, HAT_Y + 10, 156, 9, RED)
+
+
+@item
+def trophy(a):
+    x = OFF_X
+    a.ellipse(x, HELD_Y - 28, 42, 40, GOLD)
+    a.r(x - 42, HELD_Y - 62, 84, 34, GOLD)                 # cup mouth
+    a.raw(x - 62, HELD_Y - 52, 22, 44, GOLD_D)             # handles
+    a.raw(x + 40, HELD_Y - 52, 22, 44, GOLD_D)
+    _shaft(a, GOLD_D, x, HELD_Y + 8, HELD_Y + 46, 22)
+    a.r(x - 40, HELD_Y + 42, 80, 24, GOLD_D)               # plinth
+
+
+@item
+def keeper_gloves(a):
+    x = OFF_X
+    a.r(x - 34, HELD_Y - 26, 68, 76, LIME)
+    a.raw(x - 34, HELD_Y - 32, 68, 16, CHAR)               # cuff
+    for dx in (-24, -2, 20):                               # fingers
+        a.raw(x + dx, HELD_Y - 48, 16, 30, LIME)
+
+
+# ------------------------------ GOTH ---------------------------------------
+@item
+def choker_spike(a):
+    a.r(BODY_CX - 68, COLLAR_Y + 2, 136, 24, BLACK)
+    for dx in range(-58, 62, 20):                          # spikes
+        a.tri(BODY_CX + dx, COLLAR_Y - 12, 8, COLLAR_Y + 4, SILVER)
+
+
+@item
+def veil_black(a):
+    _dome(a, BLACK, 40, 68)
+    a.r(HEAD_CX - 90, HAT_Y - 24, 180, 22, CHAR)
+    for i in range(4):                                     # lace falling past the ears
+        a.raw(HEAD_CX - 90 + i * 48, HAT_Y - 2, 34, 62, (52, 52, 62, 190))
+
+
+@item
+def bat_wings(a):
+    for s in (-1, 1):
+        for i in range(4):
+            span = 120 - i * 22
+            x = BODY_CX + s * (92 + i * 30)
+            a.r(x - (28 if s < 0 else 0), BODY_TOP - 34 + i * 20, 30, span, CHAR)
+            a.tri(x + (-14 if s < 0 else 14), BODY_TOP - 34 + i * 20 + span + 26,
+                  15, BODY_TOP - 34 + i * 20 + span, CHAR)   # scalloped tips
+
+
+@item
+def candelabra(a):
+    x = HAND_X
+    _shaft(a, SILVER_D, x, HELD_Y - 40, HELD_Y + 60, 18)
+    a.r(x - 52, HELD_Y - 44, 104, 16, SILVER_D)            # arms
+    for dx in (-46, 0, 46):
+        a.raw(x + dx - 9, HELD_Y - 78, 18, 36, CREAM)      # candles
+        a.tri(x + dx, HELD_Y - 104, 8, HELD_Y - 78, ORANGE)
+    a.r(x - 34, HELD_Y + 54, 68, 18, SILVER_D)
+
+
+@item
+def shades_goth(a):
+    for cx in (EYE_L, EYE_R):
+        a.ellipse(cx, EYE_CY, 30, 28, BLACK)
+        a.raw(cx - 18, EYE_CY - 14, 14, 7, (120, 120, 140, 255))
+    a.raw(EYE_L + 26, EYE_CY - 4, 34, 8, BLACK)
+
+
+# ------------------------------- ALT ---------------------------------------
+@item
+def band_tee(a):
+    _torso(a, BLACK, h=88, w=100)
+    a.raw(BODY_CX - 58, COLLAR_Y + 20, 116, 12, WHITE)     # scrawled band logo
+    a.raw(BODY_CX - 42, COLLAR_Y + 40, 84, 10, WHITE)
+    a.raw(BODY_CX - 26, COLLAR_Y + 58, 52, 8, RED)
+
+
+@item
+def studded_jacket(a):
+    _torso(a, CHAR, h=92, w=106)
+    a.raw(BODY_CX - 106, COLLAR_Y - 6, 30, 92, BLACK)      # open lapels
+    a.raw(BODY_CX + 76, COLLAR_Y - 6, 30, 92, BLACK)
+    for dx in range(-96, 100, 24):                         # shoulder studs
+        a.raw(BODY_CX + dx, COLLAR_Y + 4, 10, 10, SILVER)
+
+
+@item
+def guitar(a):
+    x = HAND_X - 2
+    a.ellipse(x, HELD_Y + 44, 52, 46, RED_D)               # body
+    a.ellipse(x, HELD_Y + 12, 40, 34, RED_D)
+    a.raw(x - 9, HELD_Y + 8, 18, 26, BLACK)                # sound hole
+    _shaft(a, BROWN, x, HELD_Y - 108, HELD_Y, 20)          # neck
+    a.r(x - 18, HELD_Y - 124, 36, 22, CHAR)                # headstock
+
+
+@item
+def dyed_bangs(a):
+    a.r(HEAD_CX - 82, HAT_Y - 14, 164, 34, LILAC)
+    for i, dx in enumerate(range(-76, 80, 26)):            # choppy fringe
+        a.raw(HEAD_CX + dx, HAT_Y + 16, 22, 26 + (10 if i % 2 else 0), LILAC)
+    a.raw(HEAD_CX - 82, HAT_Y - 14, 40, 20, CYAN)          # streak
+
+
+@item
+def piercings(a):
+    a.raw(EYE_L - 34, EYE_CY - 26, 12, 12, SILVER)         # brow bar
+    a.raw(EYE_L - 34, EYE_CY - 26, 30, 5, SILVER)
+    a.raw(EYE_CX - 4, EYE_CY + 30, 12, 12, SILVER)         # septum
+    a.raw(EYE_R + 26, EYE_CY + 4, 10, 10, SILVER)
+
+
+# ------------------------------- PREP --------------------------------------
+@item
+def sweater_vest(a):
+    _torso(a, GOLD, h=86, w=98)
+    a.tri(BODY_CX, COLLAR_Y + 38, 40, COLLAR_Y - 8, NAVY)  # V-neck
+    a.r(BODY_CX - 98, COLLAR_Y + 68, 196, 18, NAVY)        # ribbed hem
+    for dx in (-60, 0, 60):
+        a.raw(BODY_CX + dx - 20, COLLAR_Y + 46, 40, 8, NAVY)
+
+
+@item
+def polo_collar(a):
+    _torso(a, MINT, h=80, w=96)
+    a.tri(BODY_CX - 34, COLLAR_Y + 30, 26, COLLAR_Y - 14, WHITE)   # popped collar
+    a.tri(BODY_CX + 34, COLLAR_Y + 30, 26, COLLAR_Y - 14, WHITE)
+    a.raw(BODY_CX - 5, COLLAR_Y + 6, 10, 40, WHITE)                # placket
+    a.raw(BODY_CX + 44, COLLAR_Y + 26, 20, 16, NAVY)               # crest
+
+
+@item
+def tennis_racket(a):
+    x = HAND_X + 2
+    # strings first, then the frame over them
+    for i in range(-2, 3):
+        a.raw(x + i * 16 - 3, HELD_Y - 116, 6, 92, CREAM)
+        a.raw(x - 40, HELD_Y - 108 + i * 18, 80, 6, CREAM)
+    a.d.ellipse([x - 44, HELD_Y - 124, x + 44, HELD_Y - 20], outline=NAVY, width=13)
+    _shaft(a, NAVY, x, HELD_Y - 24, HELD_Y + 58, 18)
+
+
+@item
+def headband_prep(a):
+    a.r(HEAD_CX - 76, HAT_Y - 2, 152, 22, NAVY)
+    a.raw(HEAD_CX - 76, HAT_Y + 4, 152, 7, WHITE)
+    a.raw(HEAD_CX + 44, HAT_Y - 12, 22, 22, WHITE)
+
+
+@item
+def pearls(a):
+    for i, dx in enumerate(range(-64, 70, 18)):
+        dip = abs(i - 3) * 5
+        a.raw(BODY_CX + dx, COLLAR_Y + 26 - dip, 17, 17, CREAM)
+
+
+# ------------------------------- JOCK --------------------------------------
+@item
+def sweatband(a):
+    a.r(HEAD_CX - 80, HAT_Y - 4, 160, 30, WHITE)
+    a.raw(HEAD_CX - 80, HAT_Y + 4, 160, 8, RED)
+    a.raw(HEAD_CX - 80, HAT_Y + 14, 160, 8, BLUE)
+
+
+@item
+def gym_tank(a):
+    _torso(a, WHITE, h=84, w=88)
+    a.raw(BODY_CX - 88, COLLAR_Y - 6, 26, 84, TEAL_D)      # deep armholes
+    a.raw(BODY_CX + 62, COLLAR_Y - 6, 26, 84, TEAL_D)
+    a.raw(BODY_CX - 30, COLLAR_Y + 24, 60, 34, RED)        # big number
+
+
+@item
+def football(a):
+    cx, cy = HAND_X + 2, HELD_Y + 8
+    a.ellipse(cx, cy, 52, 36, BROWN)
+    a.raw(cx - 22, cy - 4, 44, 8, WHITE)                   # laces
+    for dx in (-12, 0, 12):
+        a.raw(cx + dx, cy - 12, 6, 24, WHITE)
+
+
+@item
+def whistle(a):
+    a.raw(BODY_CX - 60, COLLAR_Y + 4, 120, 7, RED)         # lanyard
+    a.raw(BODY_CX + 30, COLLAR_Y + 8, 8, 44, RED)
+    a.r(BODY_CX + 18, COLLAR_Y + 46, 44, 26, SILVER)
+    a.raw(BODY_CX + 54, COLLAR_Y + 52, 18, 14, SILVER_D)
+
+
+@item
+def medal_gold(a):
+    a.raw(BODY_CX - 26, COLLAR_Y - 6, 12, 54, BLUE)        # ribbon
+    a.raw(BODY_CX + 14, COLLAR_Y - 6, 12, 54, BLUE)
+    a.ellipse(BODY_CX, COLLAR_Y + 66, 34, 32, GOLD)
+    a.raw(BODY_CX - 10, COLLAR_Y + 54, 20, 24, GOLD_D)     # embossed "1"
+
+
+# ------------------------------- NERD --------------------------------------
+@item
+def glasses_thick(a):
+    for cx in (EYE_L, EYE_R):
+        a.d.rectangle([cx - 38, EYE_CY - 30, cx + 38, EYE_CY + 30], outline=CHAR, width=11)
+        a.raw(cx - 30, EYE_CY - 22, 22, 9, (255, 255, 255, 110))
+    a.raw(EYE_L + 38, EYE_CY - 5, 40, 11, CHAR)
+    a.raw(EYE_CX - 6, EYE_CY - 8, 14, 16, WHITE)           # taped bridge
+
+
+@item
+def lab_coat(a):
+    _torso(a, WHITE, h=104, w=110)
+    a.raw(BODY_CX - 6, COLLAR_Y - 6, 12, 104, (208, 214, 220, 255))   # button placket
+    a.tri(BODY_CX - 40, COLLAR_Y + 30, 28, COLLAR_Y - 10, (208, 214, 220, 255))
+    a.tri(BODY_CX + 40, COLLAR_Y + 30, 28, COLLAR_Y - 10, (208, 214, 220, 255))
+    a.raw(BODY_CX + 40, COLLAR_Y + 50, 44, 34, (208, 214, 220, 255))  # chest pocket
+    a.raw(BODY_CX + 52, COLLAR_Y + 42, 8, 22, BLUE)                   # pens
+    a.raw(BODY_CX + 66, COLLAR_Y + 42, 8, 22, RED)
+
+
+@item
+def book(a):
+    x, y = HAND_X - 2, HELD_Y - 16
+    a.r(x - 48, y, 96, 74, MAROON)
+    a.raw(x - 40, y + 8, 80, 58, CREAM)                    # pages
+    a.raw(x - 2, y + 8, 6, 58, MAROON)                     # spine
+    for i in range(4):
+        a.raw(x - 34, y + 18 + i * 11, 28, 5, (150, 150, 160, 255))
+
+
+@item
+def propeller_beanie(a):
+    _dome(a, RED, 46, 66)
+    a.raw(HEAD_CX - 66, HAT_Y - 24, 132, 14, BLUE)
+    a.raw(HEAD_CX - 5, HAT_Y - 74, 12, 30, SILVER_D)       # spindle
+    a.raw(HEAD_CX - 62, HAT_Y - 82, 58, 14, LIME)          # blades
+    a.raw(HEAD_CX + 6, HAT_Y - 92, 58, 14, CYAN)
+
+
+@item
+def calculator(a):
+    x, y = OFF_X, HELD_Y - 40
+    a.r(x - 34, y, 68, 92, CHAR)
+    a.raw(x - 26, y + 8, 52, 22, LIME)                     # display
+    for r_ in range(3):
+        for c_ in range(3):
+            a.raw(x - 26 + c_ * 20, y + 40 + r_ * 17, 14, 12, SILVER_D)
+
+
 def contact_sheet(rendered):
     """One image with every placeholder over the base cat, for eyeballing fit."""
     base = Image.open(os.path.join(os.path.dirname(__file__), "..",
@@ -392,7 +877,8 @@ def contact_sheet(rendered):
     sheet.convert("RGB").save(os.path.join(OUT, "..", "_contact_sheet.png"))
 
 
-BACK_SLOT = {"cape", "jetpack", "wings", "sun_aura"}
+BACK_SLOT = {"cape", "jetpack", "wings", "sun_aura", "cloak_ranger", "bat_wings"}
+NO_OUTLINE = {"sun_aura"}      # soft glows an outline would ruin
 
 
 def templates():
@@ -433,8 +919,7 @@ if __name__ == "__main__":
     for name, fn in ITEMS.items():
         a = Art()
         fn(a)
-        # the aura is a soft glow — an outline would ruin it
-        rendered[name] = a.finish(name, ow=0 if name == "sun_aura" else 5)
+        rendered[name] = a.finish(name, ow=0 if name in NO_OUTLINE else 5)
     print(f"wrote {len(rendered)} placeholders to {os.path.normpath(OUT)}")
     try:
         contact_sheet(rendered)

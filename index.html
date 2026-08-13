@@ -113,6 +113,8 @@ body{font-family:'Nunito',system-ui,sans-serif;color:var(--ink);background:#0000
 .slotbar{display:flex;gap:4px;margin:8px 0 7px;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;} .slotbar::-webkit-scrollbar{display:none;}
 .slotbar button{flex:0 0 auto;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:7px 11px;color:var(--mut);font-family:'Nunito';font-weight:800;font-size:11.5px;cursor:pointer;}
 .slotbar button.on{background:var(--mint);color:#0b3329;border-color:#00120e;}
+.setbar{margin:8px 0 0;} .setbar button{padding:6px 9px;font-size:10.5px;}
+.setbar button.on{background:var(--gold);color:#3a2a00;}
 .wgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;max-height:38vh;overflow-y:auto;padding:2px;}
 .wc{position:relative;background:var(--panel2);border:2px solid var(--line);border-radius:12px;padding:4px 3px 6px;text-align:center;cursor:pointer;}
 .wc.on{border-color:var(--mint);box-shadow:0 0 0 2px rgba(111,233,203,.28);}
@@ -666,13 +668,30 @@ NEKO_IMG.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEQCAYAAAAKxUmj
    to _gen, so a stale checkout still renders. */
 const DOLL=400, DOLL_OX=50, DOLL_OY=112, BASE_W=300, BASE_H=272;
 const SLOTS=[
-  {id:"back",z:10,name:"Back",e:"🦋",behind:true},   // behind:true = drawn under the cat
+  {id:"back",z:10,name:"Back",e:"🎒",behind:true},   // behind:true = drawn under the cat
   {id:"body",z:20,name:"Body",e:"👕"},
   {id:"head",z:30,name:"Head",e:"🎩"},
   {id:"face",z:40,name:"Face",e:"🕶️"},
-  {id:"hand",z:50,name:"Held",e:"🧸"}
+  {id:"offhand",z:45,name:"Off-hand",e:"🛡️"},       // shield side, so sword+shield can co-exist
+  {id:"hand",z:50,name:"Held",e:"⚔️"}
 ];
 const SLOT_BY_ID={}; SLOTS.forEach(s=>SLOT_BY_ID[s.id]=s);
+// Themed sets. Every set covers enough slots to wear as a full outfit, which is what
+// makes the set-complete badge worth chasing. `core` = the weight/streak trophy items.
+const SETS=[
+  {id:"core",    name:"Core",       e:"⭐"},
+  {id:"classic", name:"Classics",   e:"🎪"},
+  {id:"fantasy", name:"Fellowship", e:"⚔️"},
+  {id:"street",  name:"Streetwear", e:"🧢"},
+  {id:"y2k",     name:"Y2K",        e:"💿"},
+  {id:"worldcup",name:"World Cup",  e:"⚽"},
+  {id:"goth",    name:"Goth",       e:"🦇"},
+  {id:"alt",     name:"Alt",        e:"🎸"},
+  {id:"prep",    name:"Prep",       e:"🎾"},
+  {id:"jock",    name:"Jock",       e:"🏈"},
+  {id:"nerd",    name:"Nerd",       e:"🔬"}
+];
+const SET_BY_ID={}; SETS.forEach(s=>SET_BY_ID[s.id]=s);
 /* Weight unlocks are deliberately bunched at rungs 2-8: free play caps at FREE_CAP
    (rung 8, "a grown adult"), so a wardrobe spread evenly over all 24 rungs would read
    as a paywall. Eight reachable items plus four distant prestige ones reads as a goal. */
@@ -704,8 +723,71 @@ const COSMETICS=[
   {id:"boba",       slot:"hand",name:"Boba",            rar:"uncommon", via:"shop",yarn:80},
   {id:"top_hat",    slot:"head",name:"Top Hat",         rar:"rare",     via:"shop",yarn:120},
   {id:"laser_eyes", slot:"face",name:"Laser Eyes",      rar:"legendary",via:"shop",yarn:150},
-  {id:"wizard_hat", slot:"head",name:"Wizard Hat",      rar:"legendary",via:"shop",yarn:200}
+  {id:"wizard_hat", slot:"head",name:"Wizard Hat",      rar:"legendary",via:"shop",yarn:200},
+  /* ---- themed sets: all shop-priced, surfaced one theme per day (see shopToday) ---- */
+  {id:"helm_knight",   slot:"head",   name:"Knight's Helm",   rar:"rare",     via:"shop",yarn:130,set:"fantasy"},
+  {id:"plate_armor",   slot:"body",   name:"Steel Plate",     rar:"rare",     via:"shop",yarn:160,set:"fantasy"},
+  {id:"sword",         slot:"hand",   name:"Longsword",       rar:"rare",     via:"shop",yarn:140,set:"fantasy"},
+  {id:"shield_kite",   slot:"offhand",name:"Kite Shield",     rar:"rare",     via:"shop",yarn:130,set:"fantasy"},
+  {id:"cloak_ranger",  slot:"back",   name:"Ranger's Cloak",  rar:"uncommon", via:"shop",yarn:120,set:"fantasy"},
+  {id:"hood_ranger",   slot:"head",   name:"Ranger's Hood",   rar:"uncommon", via:"shop",yarn:90, set:"fantasy"},
+  {id:"circlet_elven", slot:"head",   name:"Elven Circlet",   rar:"legendary",via:"shop",yarn:150,set:"fantasy"},
+  {id:"bow_elven",     slot:"hand",   name:"Elven Bow",       rar:"rare",     via:"shop",yarn:140,set:"fantasy"},
+  {id:"axe_dwarf",     slot:"hand",   name:"Dwarven Axe",     rar:"rare",     via:"shop",yarn:130,set:"fantasy"},
+  {id:"staff_wizard",  slot:"hand",   name:"Arcane Staff",    rar:"legendary",via:"shop",yarn:180,set:"fantasy"},
+  {id:"snapback",      slot:"head",   name:"Snapback",        rar:"common",   via:"shop",yarn:55, set:"street"},
+  {id:"bucket_hat",    slot:"head",   name:"Bucket Hat",      rar:"common",   via:"shop",yarn:50, set:"street"},
+  {id:"puffer_jacket", slot:"body",   name:"Puffer Jacket",   rar:"uncommon", via:"shop",yarn:90, set:"street"},
+  {id:"chain_gold",    slot:"body",   name:"Gold Chain",      rar:"rare",     via:"shop",yarn:120,set:"street"},
+  {id:"boombox",       slot:"hand",   name:"Boombox",         rar:"rare",     via:"shop",yarn:130,set:"street"},
+  {id:"clips_butterfly",slot:"head",  name:"Butterfly Clips", rar:"common",   via:"shop",yarn:50, set:"y2k"},
+  {id:"trucker_hat",   slot:"head",   name:"Trucker Hat",     rar:"common",   via:"shop",yarn:55, set:"y2k"},
+  {id:"shades_tiny",   slot:"face",   name:"Tiny Shades",     rar:"uncommon", via:"shop",yarn:70, set:"y2k"},
+  {id:"vest_puffer",   slot:"body",   name:"Puffer Vest",     rar:"uncommon", via:"shop",yarn:80, set:"y2k"},
+  {id:"flip_phone",    slot:"hand",   name:"Flip Phone",      rar:"uncommon", via:"shop",yarn:75, set:"y2k"},
+  {id:"headband_sport",slot:"head",   name:"Sweat Headband",  rar:"common",   via:"shop",yarn:45, set:"worldcup"},
+  {id:"jersey",        slot:"body",   name:"Home Jersey",     rar:"uncommon", via:"shop",yarn:85, set:"worldcup"},
+  {id:"soccer_ball",   slot:"hand",   name:"Match Ball",      rar:"common",   via:"shop",yarn:55, set:"worldcup"},
+  {id:"keeper_gloves", slot:"offhand",name:"Keeper Gloves",   rar:"uncommon", via:"shop",yarn:80, set:"worldcup"},
+  {id:"trophy",        slot:"offhand",name:"The Trophy",      rar:"legendary",via:"shop",yarn:220,set:"worldcup"},
+  {id:"veil_black",    slot:"head",   name:"Mourning Veil",   rar:"rare",     via:"shop",yarn:120,set:"goth"},
+  {id:"shades_goth",   slot:"face",   name:"Round Blackouts", rar:"uncommon", via:"shop",yarn:80, set:"goth"},
+  {id:"choker_spike",  slot:"body",   name:"Spiked Choker",   rar:"uncommon", via:"shop",yarn:75, set:"goth"},
+  {id:"candelabra",    slot:"hand",   name:"Candelabra",      rar:"rare",     via:"shop",yarn:130,set:"goth"},
+  {id:"bat_wings",     slot:"back",   name:"Bat Wings",       rar:"legendary",via:"shop",yarn:200,set:"goth"},
+  {id:"dyed_bangs",    slot:"head",   name:"Dyed Bangs",      rar:"uncommon", via:"shop",yarn:70, set:"alt"},
+  {id:"piercings",     slot:"face",   name:"Piercings",       rar:"uncommon", via:"shop",yarn:65, set:"alt"},
+  {id:"band_tee",      slot:"body",   name:"Band Tee",        rar:"common",   via:"shop",yarn:55, set:"alt"},
+  {id:"studded_jacket",slot:"body",   name:"Studded Jacket",  rar:"rare",     via:"shop",yarn:125,set:"alt"},
+  {id:"guitar",        slot:"hand",   name:"Electric Guitar", rar:"rare",     via:"shop",yarn:140,set:"alt"},
+  {id:"headband_prep", slot:"head",   name:"Prep Headband",   rar:"common",   via:"shop",yarn:45, set:"prep"},
+  {id:"polo_collar",   slot:"body",   name:"Popped Polo",     rar:"common",   via:"shop",yarn:55, set:"prep"},
+  {id:"sweater_vest",  slot:"body",   name:"Sweater Vest",    rar:"common",   via:"shop",yarn:60, set:"prep"},
+  {id:"pearls",        slot:"body",   name:"Pearls",          rar:"rare",     via:"shop",yarn:110,set:"prep"},
+  {id:"tennis_racket", slot:"hand",   name:"Tennis Racket",   rar:"uncommon", via:"shop",yarn:85, set:"prep"},
+  {id:"sweatband",     slot:"head",   name:"Sweatband",       rar:"common",   via:"shop",yarn:45, set:"jock"},
+  {id:"gym_tank",      slot:"body",   name:"Gym Tank",        rar:"common",   via:"shop",yarn:55, set:"jock"},
+  {id:"whistle",       slot:"body",   name:"Coach's Whistle", rar:"uncommon", via:"shop",yarn:70, set:"jock"},
+  {id:"medal_gold",    slot:"body",   name:"Gold Medal",      rar:"rare",     via:"shop",yarn:115,set:"jock"},
+  {id:"football",      slot:"hand",   name:"Football",        rar:"common",   via:"shop",yarn:60, set:"jock"},
+  {id:"propeller_beanie",slot:"head", name:"Propeller Beanie",rar:"uncommon", via:"shop",yarn:70, set:"nerd"},
+  {id:"glasses_thick", slot:"face",   name:"Thick Frames",    rar:"common",   via:"shop",yarn:50, set:"nerd"},
+  {id:"lab_coat",      slot:"body",   name:"Lab Coat",        rar:"uncommon", via:"shop",yarn:90, set:"nerd"},
+  {id:"book",          slot:"hand",   name:"Heavy Tome",      rar:"common",   via:"shop",yarn:55, set:"nerd"},
+  {id:"calculator",    slot:"offhand",name:"Graphing Calc",   rar:"uncommon", via:"shop",yarn:75, set:"nerd"}
 ];
+// Items predating themed sets fall into core (weight/streak trophies) or classic (shop).
+COSMETICS.forEach(c=>{if(!c.set)c.set=(c.via==="shop")?"classic":"core";});
+function setItems(sid){return COSMETICS.filter(c=>c.set===sid);}
+function setDone(sid){return setItems(sid).every(c=>owns(c.id));}
+// "Wearing a full set" = every occupied slot comes from one set, and it fills at least
+// three of them. Deliberately cosmetic — a stat bonus here would compete with burning,
+// which is meant to be the only thing that actually grows the cat.
+function wornSet(){
+  const on=equippedList(); if(on.length<3)return null;
+  const sid=on[0].set;
+  return on.every(c=>c.set===sid)?SET_BY_ID[sid]:null;
+}
 const COS_BY_ID={}; COSMETICS.forEach(c=>COS_BY_ID[c.id]=c);
 const COS_DIR="assets/cosmetics/", COS_IMG={};
 let COS_ART={}, cosArtReady=false, cosArtP=null;
@@ -824,21 +906,35 @@ function questTick(id,n){
   }
   save();if(U.tab==="neko")render();
 }
-// Four shop slots, rotating daily out of the yarn-priced pool. The lineup is latched
-// into state on first view of the day: deriving it live from the unowned pool would
-// reshuffle the whole shop the moment you bought something.
+// The shop stocks ONE themed set per day rather than four unrelated pieces. A
+// coherent "today is Goth day" is a far better reason to come back, and stocking a
+// whole set together is the only way a full themed outfit realistically gets built.
+// The lineup is latched into state on first view of the day: deriving it live from
+// the unowned pool would reshuffle the shop the moment you bought something.
+const SHOP_SETS=SETS.filter(s=>s.id!=="core").map(s=>s.id);
 function shopToday(){
   const d=dayKey();
-  if(!S.shop||S.shop.day!==d){
-    const pool=COSMETICS.filter(c=>c.via==="shop"&&!owns(c.id));
-    S.shop={day:d,ids:(pool.length<=4?pool:pickN(pool,4,dayRnd(11))).map(c=>c.id)};
+  if(!S.shop||S.shop.day!==d||!S.shop.set){
+    const r=dayRnd(11), start=Math.floor(r()*SHOP_SETS.length);
+    // walk from the day's pick to the next set that still has something to sell, so a
+    // completionist never opens the shop to an empty shelf
+    let sid=SHOP_SETS[start];
+    for(let i=0;i<SHOP_SETS.length;i++){
+      const cand=SHOP_SETS[(start+i)%SHOP_SETS.length];
+      if(setItems(cand).some(c=>!owns(c.id))){sid=cand;break;}
+    }
+    S.shop={day:d,set:sid,ids:setItems(sid).map(c=>c.id)};
     save();
   }
   return S.shop.ids.map(id=>COS_BY_ID[id]).filter(Boolean);
 }
+function shopSet(){shopToday();return SET_BY_ID[S.shop.set]||SET_BY_ID.classic;}
 const FREEZE_COST=75;
 function buyCos(id){
-  const c=COS_BY_ID[id];if(!c||owns(id))return;
+  const c=COS_BY_ID[id];if(!c||owns(id)||c.via!=="shop")return;
+  // Enforce the daily rotation here, not just in the grid — otherwise the whole
+  // "today's set" scarcity is one console call away from meaningless.
+  if(S.shop&&S.shop.ids.indexOf(id)<0){toast(`${SET_BY_ID[c.set].e} Not in stock today`,`${SET_BY_ID[c.set].name} comes back around`);sfx.err();return;}
   if((S.yarn||0)<c.yarn){toast("Not enough yarn 🧶",`${c.yarn-(S.yarn||0)} more to go`);sfx.err();return;}
   S.yarn-=c.yarn;S.owned.push(id);S.equipped[c.slot]=id;
   toast(`💎 ${c.name}!`,`-🧶 ${c.yarn} · now wearing it`);sfx.win();confetti("💎");
@@ -852,11 +948,21 @@ function buyFreeze(){
 }
 
 /* ---- wardrobe sheet ---- */
-let wrSlot="head";
-function openWardrobe(slot){
+let wrSlot="head", wrSet="all";
+function openWardrobe(slot,setId){
+  if(setId!==undefined)wrSet=setId;
+  const pool=COSMETICS.filter(c=>wrSet==="all"||c.set===wrSet);
+  // A set never covers every slot, so hide the slots it has nothing for and pull the
+  // selection back to a populated one — otherwise picking a set can land on an empty grid.
+  const slotsWith=SLOTS.filter(s=>pool.some(c=>c.slot===s.id));
   wrSlot=slot||wrSlot;
-  const sl=SLOTS.map(s=>`<button class="${s.id===wrSlot?'on':''}" onclick="window.__wrSlot('${s.id}')">${s.e} ${s.name}</button>`).join("");
-  const inSlot=COSMETICS.filter(c=>c.slot===wrSlot);
+  if(!slotsWith.some(s=>s.id===wrSlot))wrSlot=(slotsWith[0]||SLOTS[0]).id;
+  const sl=slotsWith.map(s=>`<button class="${s.id===wrSlot?'on':''}" onclick="window.__wrSlot('${s.id}')">${s.e} ${s.name}</button>`).join("");
+  const setChip=(id,label,done,n,tot)=>`<button class="${id===wrSet?'on':''}" onclick="window.__wrSet('${id}')">${label}${tot?` <span style="opacity:.7">${done?"✓":n+"/"+tot}</span>`:""}</button>`;
+  const sb=[setChip("all","🗂️ All")].concat(SETS.map(s=>{
+    const it=setItems(s.id), n=it.filter(c=>owns(c.id)).length;
+    return setChip(s.id,s.e+" "+s.name,n===it.length,n,it.length);})).join("");
+  const inSlot=pool.filter(c=>c.slot===wrSlot);
   const shop=shopToday(), shopIds=shop.map(c=>c.id);
   const cell=c=>{
     const has=owns(c.id), on=S.equipped[c.slot]===c.id, buyable=!has&&c.via==="shop"&&shopIds.indexOf(c.id)>=0;
@@ -876,16 +982,18 @@ function openWardrobe(slot){
         <b>${owned}</b> / ${COSMETICS.length} unlocked<br>
         <span class="yn">🧶 ${S.yarn||0} yarn</span><br>
         🧊 ${S.freezes||0} streak freeze${(S.freezes||0)===1?"":"s"}<br>
-        <span style="font-size:10.5px">earn yarn from daily quests</span>
+        ${wornSet()?`<span style="color:var(--mint)">${wornSet().e} full ${wornSet().name} fit!</span>`
+                   :`<span style="font-size:10.5px">earn yarn from daily quests</span>`}
       </div>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:2px">
       <button class="btn ghost" style="padding:8px;font-size:12px" onclick="window.__wrRandom()">🎲 Surprise me</button>
       <button class="btn ghost" style="padding:8px;font-size:12px" onclick="window.__wrNude()">🧼 Take it all off</button>
     </div>
+    <div class="slotbar setbar">${sb}</div>
     <div class="slotbar">${sl}</div>
     <div class="wgrid">${inSlot.map(cell).join("")}</div>
-    <div class="foot" style="text-align:left;margin:9px 0 8px">Today's shop: ${shop.length?shop.map(c=>c.name).join(" · "):"sold out — come back tomorrow"}${(S.freezes||0)<3?` · <a onclick="window.__wrFreeze()">buy a 🧊 streak freeze (🧶 ${FREEZE_COST})</a>`:""}</div>
+    <div class="foot" style="text-align:left;margin:9px 0 8px">${shopSet().e} <b>${shopSet().name}</b> in the shop today: ${shop.length?shop.map(c=>owns(c.id)?c.name:`${c.name} (🧶${c.yarn})`).join(" · "):"sold out — come back tomorrow"}${(S.freezes||0)<3?` · <a onclick="window.__wrFreeze()">buy a 🧊 streak freeze (🧶 ${FREEZE_COST})</a>`:""}</div>
     <button class="btn mint" onclick="window.__close()">Done</button></div>`,true);
   previewInto("wrprev",S.equipped);
   inSlot.forEach(c=>{const eq=Object.assign({},S.equipped);eq[c.slot]=c.id;previewInto("wt_"+c.id,eq);});
@@ -897,6 +1005,7 @@ function wrEquip(id){
 }
 window.__wardrobe=()=>{openWardrobe();sfx.ok();};
 window.__wrSlot=(s)=>openWardrobe(s);
+window.__wrSet=(s)=>{sfx.ok();openWardrobe(null,s);};
 window.__wrEquip=wrEquip;
 window.__wrBuy=buyCos;
 window.__wrFreeze=buyFreeze;

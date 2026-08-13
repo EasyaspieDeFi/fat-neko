@@ -20,7 +20,7 @@ ears touch y=0, leaving nowhere to put a hat.
 ```
 drawCosmetics(ctx, dx,dy,dw,dh, behind=true)   ← capes, wings, auras
 ctx.drawImage(NEKO_IMG, dx,dy,dw,dh)
-drawCosmetics(ctx, dx,dy,dw,dh, behind=false)  ← body → head → face → hand, by slot z
+drawCosmetics(ctx, dx,dy,dw,dh, behind=false)  ← body → head → face → offhand → hand, by slot z
 ```
 
 Both the live hero canvas and the shareable Chonk Card call the same pair.
@@ -31,7 +31,7 @@ Both the live hero canvas and the shareable Chonk Card call the same pair.
 |---|---|---|
 | Weight milestones | 12 | `ladderIdx() >= rung` against the existing 24-rung `LADDER` |
 | Login streaks | 7 | `S.streak >= day` at 3 / 7 / 14 / 30 / 60 / 100 / 365 |
-| 🧶 Yarn shop | 9 | bought from a 4-slot shop that rotates daily |
+| 🧶 Yarn shop | 59 | one **themed set** stocked per day, cycling through the sets |
 
 Weight unlocks are deliberately bunched at rungs 2–8. Free play caps at `FREE_CAP`
 (rung 8, "a grown adult"), so a wardrobe spread evenly across all 24 rungs would read as a
@@ -92,3 +92,27 @@ the author templates. Placeholders are stand-ins for real art; see
   closes the loop for sharing; seeing other players' nekos dressed would close it harder.
 - **No backgrounds/rooms yet.** The canvas already draws a room; a full-frame PNG slot is
   the cheapest large win still on the table.
+
+## Themed sets
+
+Every cosmetic carries a `set`. Items predating sets are backfilled as `core` (the
+weight/streak trophies) or `classic` (the original shop items).
+
+| Set | Items | Notes |
+|---|---|---|
+| `core` | 19 | weight rungs + streak days — the trophy items |
+| `classic` | 9 | the original shop lineup |
+| `fantasy` | 10 | LOTR-flavoured armour + weapons; the only set spanning both hands |
+| `street` `y2k` `worldcup` `goth` `alt` `prep` `jock` `nerd` | 5 each | one theme per day in the shop |
+
+The shop stocks **one set per day** rather than four unrelated pieces — a coherent
+"today is Goth day" is a better reason to return, and stocking a set together is the
+only way a full themed outfit realistically gets assembled. If the day's set is fully
+owned the picker walks to the next set with stock, so completionists never hit an
+empty shelf. `buyCos` re-checks stock server-of-record style, so the rotation can't be
+bypassed by calling the handler directly.
+
+Wearing 3+ items that all share a set shows a **full-fit badge** in the wardrobe. It is
+deliberately cosmetic: a stat bonus would compete with burning, which is meant to be
+the only thing that actually grows the cat.
+

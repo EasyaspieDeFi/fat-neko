@@ -47,10 +47,16 @@ back  ─── drawn BEHIND the cat (capes, wings, jetpacks, auras)
 body  ─── collars, scarves, jackets, bibs
 head  ─── hats, crowns, headphones
 face  ─── glasses, monocles, eyepatches
-hand  ─── held props
+offhand ─ shield side, drawn at x≈74 (shields, trophies, gloves)
+hand  ─── held props, drawn at x≈300 (swords, staves, instruments)
 ```
 
-Only one item per slot can be worn at a time, so two hats never fight.
+Only one item per slot can be worn at a time, so two hats never fight. `hand` and
+`offhand` are separate slots specifically so a sword and shield can be worn together.
+
+Held things must **overlap the body outline** — the cat has no visible paws, so anything
+floating clear of the silhouette reads as detached rather than held. Anchor them around
+`HELD_Y = 318` (belly height), not up beside the head.
 
 ## Replacing a placeholder
 
